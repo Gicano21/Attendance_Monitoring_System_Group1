@@ -13,7 +13,7 @@ class StudentTimeIN extends Migration
             'enrolment_id' => ['type' => 'INT', 'constraint' => 8, 'NULL' => false],
             'program_id' => ['type' => 'INT', 'constraint' => 5],
             'course_id' => ['type' => 'INT', 'constraint' => 5],
-            'school_year_id' => ['type' => 'VARCHAR', 'constraint' => 10],
+            'school_year_id' => ['type' => 'INT', 'constraint' => 10],
             'semester_id' => ['type' => 'INT', 'constraint' => 1],
             'date' => ['type' => 'DATE', 'NULL' => false],
             'time' => ['type' => 'TIME', 'NULL' => false],

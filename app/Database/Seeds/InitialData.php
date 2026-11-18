@@ -16,24 +16,24 @@ class InitialData extends Seeder
 
         $this->SeedData('instructors', [
             [
-            'last_name' => 'Nolasco',
-            'middle_name' => 'O.',
-            'first_name' => 'Gian Carlo',
-            'extension_name' => '',
-            'gender' => 'Male',
-            'birth_date' => '2000-01-01',
-            'password' => 'qwerty',
-            'in_campus' => false,
+                'last_name' => 'Nolasco',
+                'middle_name' => 'O.',
+                'first_name' => 'Gian Carlo',
+                'extension_name' => '',
+                'gender' => 'Male',
+                'birth_date' => '2000-01-01',
+                'password' => 'qwerty',
+                'in_campus' => false,
             ],
             [
-            'last_name' => 'Dela Cruz',
-            'middle_name' => ' ',
-            'first_name' => 'Juan',
-            'extension_name' => '',
-            'gender' => 'Male',
-            'birth_date' => '1995-05-15',
-            'password' => 'password123',
-            'in_campus' => false,
+                'last_name' => 'Dela Cruz',
+                'middle_name' => ' ',
+                'first_name' => 'Juan',
+                'extension_name' => '',
+                'gender' => 'Male',
+                'birth_date' => '1995-05-15',
+                'password' => 'password123',
+                'in_campus' => false,
             ],
         ]);
 
@@ -63,14 +63,32 @@ class InitialData extends Seeder
             [
                 'assigned_course_id' => 1,
                 'course_id' => 1,
+                'role' => 'instructor',
             ],
             [
                 'assigned_course_id' => 2,
                 'course_id' => 2,
+                'role' => 'instructor',
             ],
             [
                 'assigned_course_id' => 2,
                 'course_id' => 1,
+                'role' => 'instructor',
+            ],
+            [
+                'assigned_course_id' => 3,
+                'course_id' => 1,
+                'role' => 'student',
+            ],
+            [
+                'assigned_course_id' => 4,
+                'course_id' => 2,
+                'role' => 'student',
+            ],
+            [
+                'assigned_course_id' => 4,
+                'course_id' => 1,
+                'role' => 'student',
             ],
         ]);
 
@@ -107,6 +125,74 @@ class InitialData extends Seeder
                 'instructor_level_id' => 1,
                 'assigned_program_id' => 1,
                 'assigned_course_id' => 2,
+            ],
+        ]);
+
+        $this->SeedData('year', [
+            ['year_id' => 1, 'year' => '1st Year'],
+            ['year_id' => 2, 'year' => '2nd Year'],
+            ['year_id' => 3, 'year' => '3rd Year'],
+            ['year_id' => 4, 'year' => '4th Year'],
+        ]);
+
+        $this->SeedData('school_year', [
+            ['year' => '2023-2024'],
+            ['year' => '2024-2025'],
+            ['year' => '2025-2026'],
+        ]);
+
+        $this->SeedData('semesters', [
+            ['semester_id' => 1, 'semester' => '1st Semester'],
+            ['semester_id' => 2, 'semester' => '2nd Semester'],
+        ]);
+
+        $this->SeedData('sections', [
+            ['sections_id' => 'A', 'section' => 'Section A'],
+            ['sections_id' => 'B', 'section' => 'Section B'],
+            ['sections_id' => 'C', 'section' => 'Section C'],
+        ]);
+
+        $this->SeedData('students', [
+            [
+                'last_name' => 'Smith',
+                'middle_name' => 'A.',
+                'first_name' => 'John',
+                'extension_name' => '',
+                'gender' => 'Male',
+                'birth_date' => '2000-01-01',
+                'password' => 'password123',
+                'in_campus' => true,
+            ],
+            [
+                'last_name' => 'Johnson',
+                'middle_name' => 'B.',
+                'first_name' => 'Emily',
+                'extension_name' => '',
+                'gender' => 'Female',
+                'birth_date' => '2001-02-15',
+                'password' => 'password456',
+                'in_campus' => false,
+            ],
+        ]);
+
+        $this->SeedData('enrolments', [
+            [
+                'student_id' => 1,
+                'program_id' => 1,
+                'year_id' => 1,
+                'assigned_course_id' => 3,
+                'school_year_id' => 1,
+                'semester_id' => 1,
+                'section_id' => 'A',
+            ],
+            [
+                'student_id' => 2,
+                'program_id' => 2,
+                'year_id' => 2,
+                'assigned_course_id' => 4,
+                'school_year_id' => 2,
+                'semester_id' => 1,
+                'section_id' => 'B',
             ],
         ]);
     }

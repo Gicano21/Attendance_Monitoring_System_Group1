@@ -10,7 +10,7 @@ class Sections extends Migration
     {
         $this->forge->addField([
             'sections_id' => ['type' => 'VARCHAR', 'constraint' => 8],
-            'sections' => ['type' => 'VARCHAR', 'constraint' => 100],
+            'section' => ['type' => 'VARCHAR', 'constraint' => 100],
         ]);
         $this->forge->addKey('sections_id', true);
         $this->forge->createTable('sections');

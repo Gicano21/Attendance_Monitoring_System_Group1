@@ -13,8 +13,8 @@ class EnrolmentTable extends Migration
             'student_id' => ['type' => 'INT', 'constraint' => 8],
             'program_id' => ['type' => 'INT', 'constraint' => 5],
             'year_id' => ['type' => 'INT', 'constraint' => 1],
-            'course_id' => ['type' => 'INT', 'constraint' => 5],
-            'school_year_id' => ['type' => 'VARCHAR', 'constraint' => 10],
+            'assigned_course_id' => ['type' => 'INT', 'constraint' => 10],//so the course is gonna be a
+            'school_year_id' => ['type' => 'INT', 'constraint' => 10],
             'semester_id' => ['type' => 'INT', 'constraint' => 1],
             'section_id' => ['type' => 'VARCHAR', 'constraint' => 8],
         ]);
@@ -23,7 +23,7 @@ class EnrolmentTable extends Migration
         $this->forge->addForeignKey('student_id', 'students', 'student_id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('program_id', 'programs', 'program_id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('year_id', 'year', 'year_id', 'CASCADE', 'CASCADE');
-        $this->forge->addForeignKey('course_id', 'courses', 'course_id', 'CASCADE', 'CASCADE');
+        $this->forge->addForeignKey('assigned_course_id', 'courses_assignment', 'assigned_course_id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('school_year_id', 'school_year', 'school_year_id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('semester_id', 'semesters', 'semester_id', 'CASCADE', 'CASCADE');
         $this->forge->addForeignKey('section_id', 'sections', 'sections_id', 'CASCADE', 'CASCADE');

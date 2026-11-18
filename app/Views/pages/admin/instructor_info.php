@@ -20,5 +20,15 @@
         <?php endforeach; ?>
     </ul>
 <?php endif; ?>
+<strong>Assigned Programs:</strong>
+<?php if ($assigned_programs === []): ?>
+    Not assigned
+<?php else: ?>
+    <ul>
+        <?php foreach ($assigned_programs as $program): ?>
+            <li><?= esc($program['program']) ?></li>
+        <?php endforeach; ?>
+    </ul>
+<?php endif; ?>
 
 <?= $this->endSection() ?>

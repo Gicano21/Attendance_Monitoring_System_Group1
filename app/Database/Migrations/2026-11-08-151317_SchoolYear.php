@@ -9,7 +9,7 @@ class SchoolYear extends Migration
     public function up()
     {
         $this->forge->addField([
-            'school_year_id' => ['type' => 'VARCHAR', 'constraint' => 10],
+            'school_year_id' => ['type' => 'INT', 'constraint' => 10, 'auto_increment' => true],
             'year' => ['type' => 'VARCHAR', 'constraint' => 100],
         ]);
         $this->forge->addKey('school_year_id', true);

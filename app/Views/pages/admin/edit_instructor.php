@@ -44,6 +44,21 @@
             </label><br>
         <?php endforeach; ?>
     </fieldset>
+    <fieldset>
+        <legend>Assigned Programs</legend>
+        <?php foreach ($assigned_programs as $program): ?>
+            <?php $programId = $program['program_id']; ?>
+            <label>
+                <input
+                    type="checkbox"
+                    name="program_ids[]"
+                    value="<?= esc($programId) ?>"
+                    <?= in_array($programId, $current_program_ids, true) ? 'checked' : '' ?>
+                >
+                <?= esc($program['program']) ?>
+            </label><br>
+        <?php endforeach; ?>
+    </fieldset>
     <button type="submit">Update Instructor</button>
 </form>
 
