@@ -1,0 +1,1 @@
+<footer class="footer">CampusPulse · Attendance Management System</footer>

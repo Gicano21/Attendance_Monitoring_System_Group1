@@ -8,11 +8,13 @@ class InitialData extends Seeder
 {
     public function run()
     {
-        $this->SeedData('admin_accounts', [
-            'username' => 'Gilberto Tanio Sr.',
-            'password' => 'Binitawan8080',
-            'email'    => 'gilberto8080@gmail.com',
-        ]);
+        $initialPassword = "password123"; // Default password for instructors and students
+
+        $this->SeedData('admin_accounts', [[
+            'username' => "admin",
+            'password' => password_hash("admin123", PASSWORD_DEFAULT),
+            'email' => "admin@gmail.com",
+        ]]);
 
         $this->SeedData('instructors', [
             [
@@ -22,7 +24,7 @@ class InitialData extends Seeder
                 'extension_name' => '',
                 'gender' => 'Male',
                 'birth_date' => '2000-01-01',
-                'password' => 'qwerty',
+                'password' => password_hash($initialPassword, PASSWORD_DEFAULT),
                 'in_campus' => false,
             ],
             [
@@ -32,7 +34,7 @@ class InitialData extends Seeder
                 'extension_name' => '',
                 'gender' => 'Male',
                 'birth_date' => '1995-05-15',
-                'password' => 'password123',
+                'password' => password_hash($initialPassword, PASSWORD_DEFAULT),
                 'in_campus' => false,
             ],
         ]);
@@ -160,7 +162,7 @@ class InitialData extends Seeder
                 'extension_name' => '',
                 'gender' => 'Male',
                 'birth_date' => '2000-01-01',
-                'password' => 'password123',
+                'password' => password_hash($initialPassword, PASSWORD_DEFAULT),
                 'in_campus' => true,
             ],
             [
@@ -170,7 +172,7 @@ class InitialData extends Seeder
                 'extension_name' => '',
                 'gender' => 'Female',
                 'birth_date' => '2001-02-15',
-                'password' => 'password456',
+                'password' => password_hash($initialPassword, PASSWORD_DEFAULT),
                 'in_campus' => false,
             ],
         ]);

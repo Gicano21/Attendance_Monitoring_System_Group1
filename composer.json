@@ -38,6 +38,6 @@
         "sort-packages": true
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "@php vendor/bin/phpunit --no-progress --no-coverage"
     }
 }
