@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= esc($this->renderSection('title') ?: ($title ?? 'Attendance Monitor')) ?> | CampusPulse</title>
+    <title><?= esc($this->renderSection('title') ?: ($title ?? 'Attendance Monitor')) ?> | Group 1</title>
     <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
 </head>
 <body>

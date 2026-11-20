@@ -1,5 +1,5 @@
 <header class="topbar">
-    <a class="brand" href="<?= site_url('/') ?>"><span class="brand-mark">C</span><span>CampusPulse<small>Attendance Monitor</small></span></a>
+    <a class="brand" href="<?= site_url('/') ?>"><span class="brand-mark">G1</span><span>Group 1<small>Attendance Monitoring System</small></span></a>
     <?php if (session()->get('role')): ?>
         <div class="topbar-user">
             <span><?= esc(session()->get('display_name')) ?></span>
