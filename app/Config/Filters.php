@@ -72,7 +72,7 @@ class Filters extends BaseFilters
      */
     public array $globals = [
         'before' => [
-            'csrf' => ['except' => ['api/Scan_QR_Code']],
+            'csrf' => [],
         ],
         'after' => [
             // 'honeypot',

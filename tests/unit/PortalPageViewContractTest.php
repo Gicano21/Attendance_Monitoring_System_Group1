@@ -1,39 +1,40 @@
 <?php
 
-use App\Controllers\Portal;
+use App\Controllers\PortalController;
+use App\Controllers\StudentAttendance;
 use CodeIgniter\Test\CIUnitTestCase;
 
-require_once APPPATH . 'Controllers' . DIRECTORY_SEPARATOR . 'Portal.php';
+require_once APPPATH . 'Controllers' . DIRECTORY_SEPARATOR . 'PortalController.php';
 
 /**
  * @internal
  */
-final class PortalDashboardViewContractTest extends CIUnitTestCase
+final class PortalPageViewContractTest extends CIUnitTestCase
 {
-    public function testDashboardViewRendersEveryPageWithTheControllerDataContract(): void
+    public function testEachDestinationViewRendersWithTheControllerDataContract(): void
     {
-        $controller = (new ReflectionClass(Portal::class))->newInstanceWithoutConstructor();
-        $method = new ReflectionMethod(Portal::class, 'dashboardViewData');
+        $controller = (new ReflectionClass(StudentAttendance::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(PortalController::class, 'dashboardViewData');
         $method->setAccessible(true);
 
         $cases = [
-            ['admin', 'attendance'],
-            ['admin', 'students'],
-            ['admin', 'instructors'],
-            ['admin', 'programs'],
-            ['admin', 'courses'],
-            ['instructor', 'attendance'],
-            ['instructor', 'students'],
-            ['instructor', 'schedules'],
-            ['student', 'attendance'],
-            ['admin', 'authentication'],
-            ['instructor', 'authentication'],
-            ['student', 'authentication'],
-            ['admin', 'edit'],
-            ['instructor', 'edit'],
+            ['admin', 'attendance', 'pages/admin/attendance'],
+            ['admin', 'students', 'pages/admin/students'],
+            ['admin', 'instructors', 'pages/admin/instructors'],
+            ['admin', 'programs', 'pages/admin/programs'],
+            ['admin', 'courses', 'pages/admin/courses'],
+            ['instructor', 'attendance', 'pages/instructor/attendance'],
+            ['instructor', 'students', 'pages/instructor/students'],
+            ['instructor', 'schedules', 'pages/instructor/schedules'],
+            ['student', 'attendance', 'pages/student/attendance'],
+            ['admin', 'authentication', 'pages/admin/authentication'],
+            ['instructor', 'authentication', 'pages/instructor/authentication'],
+            ['student', 'authentication', 'pages/student/authentication'],
+            ['admin', 'edit', 'pages/admin/students'],
+            ['instructor', 'edit', 'pages/instructor/students'],
         ];
 
-        foreach ($cases as [$role, $page]) {
+        foreach ($cases as [$role, $page, $view]) {
             $data = $method->invoke($controller, $role, $page, ucfirst($page));
             session()->set(['role' => $role, 'user_id' => 1, 'display_name' => 'Test User']);
 
@@ -73,7 +74,7 @@ final class PortalDashboardViewContractTest extends CIUnitTestCase
                 ]];
             }
 
-            $html = view('pages/' . $role . '/dashboard', $data);
+            $html = view($view, $data);
             $this->assertIsString($html);
             $this->assertStringContainsString(ucfirst($page), $html);
             if ($role === 'instructor' && $page === 'schedules') {

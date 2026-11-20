@@ -2,7 +2,15 @@
 
 namespace App\Controllers;
 
-class Portal extends BaseController
+use App\Models\AttendanceScheduleModel;
+use App\Models\CourseModel;
+use App\Models\EnrolmentModel;
+use App\Models\InstructorAssignmentModel;
+use App\Models\InstructorModel;
+use App\Models\ProgramModel;
+use App\Models\StudentModel;
+
+abstract class PortalController extends BaseController
 {
     private const RESOURCE_FIELDS = [
         'programs' => [
@@ -55,13 +63,13 @@ class Portal extends BaseController
             return redirect()->to($this->landingPath($role));
         }
 
-        return view('pages/login', [
+        return view('pages/login/' . $role, [
             'role' => $role,
             'action' => $role === 'admin' ? site_url('myadmin/login') : site_url($role . '/login'),
         ]);
     }
 
-    public function authenticate(string $role)
+    public function authenticateAccount(string $role)
     {
         if (!in_array($role, ['admin', 'student', 'instructor'], true)) {
             return redirect()->to('/');
@@ -152,7 +160,16 @@ class Portal extends BaseController
             }
         }
 
-        return view('pages/' . $role . '/dashboard', $data);
+        return view('pages/' . $role . '/' . $page, $data);
+    }
+
+    protected function dashboardForRole(string $role, string $page)
+    {
+        if (session()->get('role') !== $role) {
+            return redirect()->to('/');
+        }
+
+        return $this->dashboard($page);
     }
 
     public function editResource(string $resource, int $id)
@@ -183,7 +200,7 @@ class Portal extends BaseController
         $data['labels'] = $config['labels'];
         $data['record'] = $record;
 
-        return view('pages/' . $role . '/dashboard', $data);
+        return view('pages/' . $role . '/' . $resource, $data);
     }
 
     public function saveResource(string $resource)
@@ -207,21 +224,15 @@ class Portal extends BaseController
         foreach ($config['fields'] as $field) {
             $values[$field] = trim((string) $this->request->getPost($field));
         }
-        $required = match ($resource) {
-            'programs' => ['program_acronym', 'program'],
-            'courses' => ['course_acronym', 'course'],
-            default => ['first_name', 'last_name', 'gender', 'birth_date'],
+        $validationModel = match ($resource) {
+            'programs' => model(ProgramModel::class),
+            'courses' => model(CourseModel::class),
+            'students' => model(StudentModel::class),
+            'instructors' => model(InstructorModel::class),
         };
-        foreach ($required as $field) {
-            if ($values[$field] === '') {
-                return redirect()->back()->withInput()->with('error', 'Complete all required fields before saving.');
-            }
-        }
-        if (isset($values['birth_date']) && !$this->validDate($values['birth_date'])) {
-            return redirect()->back()->withInput()->with('error', 'Enter a valid birth date.');
-        }
-        if (isset($values['gender']) && strlen($values['gender']) > 6) {
-            return redirect()->back()->withInput()->with('error', 'Gender must be 6 characters or fewer in the current database schema.');
+        if (!$validationModel->validate($values)) {
+            $errors = $validationModel->errors();
+            return redirect()->back()->withInput()->with('error', reset($errors) ?: 'Check the submitted values and try again.');
         }
 
         $isAccount = in_array($resource, ['students', 'instructors'], true);
@@ -340,7 +351,7 @@ class Portal extends BaseController
         $data['assignments'] = $assignments;
         $data['rows'] = $rows;
 
-        return view('pages/instructor/dashboard', $data);
+        return view('pages/instructor/schedules', $data);
     }
 
     public function saveFacultyAssignment()
@@ -354,6 +365,16 @@ class Portal extends BaseController
         $courseId = (int) $this->request->getPost('course_id');
         $levelId = (int) $this->request->getPost('instructor_level_id');
         $db = db_connect();
+
+        $assignmentModel = model(InstructorAssignmentModel::class);
+        if (!$assignmentModel->validate([
+            'instructor_id' => $instructorId,
+            'instructor_level_id' => $levelId,
+            'program_id' => $programId,
+            'course_id' => $courseId,
+        ])) {
+            return redirect()->to('myadmin/instructors')->with('error', 'Choose an existing instructor, level, program, and course.');
+        }
 
         if ($db->table('instructors')->where('instructor_id', $instructorId)->countAllResults() === 0
             || $db->table('programs')->where('program_id', $programId)->countAllResults() === 0
@@ -422,7 +443,16 @@ class Portal extends BaseController
             }
         }
 
-        if ($assignment === null || $day === false || $day < 1 || $day > 7
+        $scheduleModel = model(AttendanceScheduleModel::class);
+        $scheduleIsValid = $day !== false && $scheduleModel->validate([
+            'faculty_id' => $facultyId,
+            'program_id' => $programId,
+            'course_id' => $courseId,
+            'day_of_week' => $day,
+            'starts_at' => $start,
+            'ends_at' => $end,
+        ]);
+        if ($assignment === null || !$scheduleIsValid
             || !$this->validTime($start) || !$this->validTime($end) || $start >= $end) {
             return redirect()->back()->withInput()->with('error', 'Choose one of your assigned Program/Course pairs, a day of the week, and a valid time window.');
         }
@@ -472,7 +502,7 @@ class Portal extends BaseController
         if (session()->get('role') !== $role) {
             return redirect()->to('/');
         }
-        return view('pages/' . $role . '/dashboard', $this->dashboardViewData($role, 'authentication', 'Change Authentication'));
+        return view('pages/' . $role . '/authentication', $this->dashboardViewData($role, 'authentication', 'Change Authentication'));
     }
 
     public function updateAuthentication(string $role)
@@ -499,156 +529,6 @@ class Portal extends BaseController
             ->where($key, session()->get('user_id'))
             ->update(['password' => password_hash($new, PASSWORD_DEFAULT)]);
         return redirect()->to($this->landingPath($role))->with('success', 'Password updated.');
-    }
-
-    public function scanQrCode()
-    {
-        $deviceKey = env('ATTENDANCE_DEVICE_API_KEY');
-        if (!is_string($deviceKey) || strlen($deviceKey) < 32) {
-            return $this->response->setStatusCode(503)->setJSON([
-                'ok' => false,
-                'message' => 'Attendance device endpoint is not configured.',
-            ]);
-        }
-
-        $providedKey = $this->request->getHeaderLine('X-Device-Key');
-        if ($providedKey === '' || !hash_equals($deviceKey, $providedKey)) {
-            return $this->response->setStatusCode(401)->setJSON([
-                'ok' => false,
-                'message' => 'Attendance device authentication failed.',
-            ]);
-        }
-
-        $payload = $this->request->getJSON(true);
-        if (!is_array($payload)) {
-            return $this->response->setStatusCode(400)->setJSON(['ok' => false, 'message' => 'JSON must include id and role.']);
-        }
-
-        $role = strtolower((string) ($payload['role'] ?? $payload['Role'] ?? ''));
-        $role = rtrim($role, 's');
-        $idValue = $payload['id'] ?? $payload['ID'] ?? null;
-        $id = filter_var($idValue, FILTER_VALIDATE_INT);
-        if (!in_array($role, ['student', 'instructor'], true) || $id === false || $id < 1) {
-            return $this->response->setStatusCode(422)->setJSON(['ok' => false, 'message' => 'Invalid participant ID or role.']);
-        }
-
-        $db = db_connect();
-        $table = $role === 'student' ? 'students' : 'instructors';
-        $key = $role === 'student' ? 'student_id' : 'instructor_id';
-        $person = $db->table($table)->where($key, $id)->get()->getRowArray();
-        if ($person === null) {
-            return $this->response->setStatusCode(404)->setJSON(['ok' => false, 'message' => 'Participant not found.']);
-        }
-
-        $now = date('Y-m-d H:i:s');
-        $schedule = $this->activeSchedule($role, (int) $id, $now);
-        if ($schedule === null) {
-            return $this->response->setStatusCode(409)->setJSON(['ok' => false, 'message' => 'No matching attendance window is active.']);
-        }
-
-        $current = (bool) $person['in_campus'];
-        $direction = $current ? 'OUT' : 'IN';
-        if ($role === 'instructor' && !$current) {
-            $alreadyCheckedIn = $db->table('attendance_records')
-                ->where('participant_role', 'instructor')
-                ->where('participant_id', $id)
-                ->where('direction', 'IN')
-                ->where('scanned_at >=', date('Y-m-d 00:00:00'))
-                ->where('scanned_at <=', date('Y-m-d 23:59:59'))
-                ->countAllResults() > 0;
-            if ($alreadyCheckedIn) {
-                return $this->response->setStatusCode(409)->setJSON(['ok' => false, 'message' => 'Instructor attendance is limited to one check-in per day.']);
-            }
-        }
-
-        $db->transStart();
-        $db->table($table)->where($key, $id)->where('in_campus', $current)->update(['in_campus' => !$current]);
-        if ($db->affectedRows() !== 1) {
-            $db->transRollback();
-            return $this->response->setStatusCode(409)->setJSON(['ok' => false, 'message' => 'Attendance was just updated. Please scan again.']);
-        }
-        $db->table('attendance_records')->insert([
-            'participant_role' => $role,
-            'participant_id' => $id,
-            'schedule_id' => $schedule['schedule_id'],
-            'direction' => $direction,
-            'scanned_at' => $now,
-        ]);
-        if ($role === 'student' && $direction === 'IN') {
-            $db->table('student_time_ins')->insert([
-                'enrolment_id' => $schedule['enrolment_id'],
-                'program_id' => $schedule['program_id'],
-                'course_id' => $schedule['course_id'],
-                'school_year_id' => $schedule['school_year_id'],
-                'semester_id' => $schedule['semester_id'],
-                'date' => date('Y-m-d'),
-                'time' => date('H:i:s'),
-            ]);
-        } elseif ($role === 'instructor' && $direction === 'IN') {
-            $db->table('instructor_time_in')->insert([
-                'faculty_id' => $schedule['faculty_id'],
-                'date' => date('Y-m-d'),
-                'time' => date('H:i:s'),
-            ]);
-        }
-        $db->transComplete();
-
-        if ($db->transStatus() === false) {
-            return $this->response->setStatusCode(500)->setJSON(['ok' => false, 'message' => 'Attendance could not be recorded.']);
-        }
-
-        return $this->response->setJSON([
-            'ok' => true,
-            'role' => $role,
-            'id' => (int) $id,
-            'status' => $current ? 'out' : 'in',
-            'scanned_at' => $now,
-        ]);
-    }
-
-    private function activeSchedule(string $role, int $id, string $now): ?array
-    {
-        $db = db_connect();
-        $today = substr($now, 0, 10);
-        $clock = substr($now, 11, 8);
-        $weekday = (int) date('N', strtotime($today));
-
-        if ($role === 'instructor') {
-            return $db->table('attendance_schedules s')
-                ->select('s.*')
-                ->join('faculty f', 'f.faculty_id = s.faculty_id')
-                ->where('f.instructor_id', $id)
-                ->groupStart()
-                    ->where('s.day_of_week', $weekday)
-                    ->orGroupStart()
-                        ->where('s.day_of_week', null)
-                        ->where('s.schedule_date', $today)
-                    ->groupEnd()
-                ->groupEnd()
-                ->where('s.starts_at <=', $clock)
-                ->where('s.ends_at >=', $clock)
-                ->orderBy('s.starts_at')
-                ->get()->getRowArray();
-        }
-
-        return $db->table('attendance_schedules s')
-            ->select('s.*, e.enrolment_id, e.school_year_id, e.semester_id')
-            ->join('enrolments e', 'e.program_id = s.program_id')
-            ->join('courses_assignment ca', 'ca.assigned_course_id = e.assigned_course_id')
-            ->where('e.student_id', $id)
-            ->where('ca.course_id = s.course_id', null, false)
-            ->where('ca.role', 'student')
-            ->groupStart()
-                ->where('s.day_of_week', $weekday)
-                ->orGroupStart()
-                    ->where('s.day_of_week', null)
-                    ->where('s.schedule_date', $today)
-                ->groupEnd()
-            ->groupEnd()
-            ->where('s.starts_at <=', $clock)
-            ->where('s.ends_at >=', $clock)
-            ->orderBy('s.starts_at')
-            ->get()->getRowArray();
     }
 
     private function attendanceRecords(?string $role = null, ?int $id = null): array
@@ -828,11 +708,14 @@ class Portal extends BaseController
             'semester_id' => (int) $this->request->getPost('semester_id'),
             'section_id' => trim((string) $this->request->getPost('section_id')),
         ];
-        if ($courseAssignment === null
-            || $values['year_id'] < 1
-            || $values['school_year_id'] < 1
-            || $values['semester_id'] < 1
-            || $values['section_id'] === '') {
+        if ($courseAssignment === null || !model(EnrolmentModel::class)->validate([
+            'program_id' => (int) $assignment['program_id'],
+            'assigned_course_id' => (int) $courseAssignment['assigned_course_id'],
+            'year_id' => $values['year_id'],
+            'school_year_id' => $values['school_year_id'],
+            'semester_id' => $values['semester_id'],
+            'section_id' => $values['section_id'],
+        ])) {
             return null;
         }
         $db = db_connect();
@@ -865,7 +748,7 @@ class Portal extends BaseController
     }
 
     /**
-     * Keeps the dashboard view's list and record variables defined on every page.
+     * Keeps common page data defined for each destination view.
      *
      * @return array<string, mixed>
      */
@@ -903,12 +786,6 @@ class Portal extends BaseController
             'instructor' => ['instructors', 'instructor_id'],
             default => ['', ''],
         };
-    }
-
-    private function validDate(string $date): bool
-    {
-        $parsed = \DateTime::createFromFormat('Y-m-d', $date);
-        return $parsed !== false && $parsed->format('Y-m-d') === $date;
     }
 
     private function hasDependents(string $resource, int $id): bool

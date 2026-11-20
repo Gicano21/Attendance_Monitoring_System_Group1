@@ -1,6 +1,6 @@
 # CampusPulse Attendance Management System
 
-A CodeIgniter 4 application for role-based student and instructor attendance, using scheduled ESP32 attendance submissions and the existing campus database.
+A CodeIgniter 4 application for role-based student and instructor attendance, with scheduled attendance windows and the existing campus database.
 
 ## Project progress
 
@@ -8,25 +8,26 @@ A CodeIgniter 4 application for role-based student and instructor attendance, us
 | --- | --- |
 | Student and instructor landing/login pages | Implemented |
 | Admin login at `/myadmin/` (not linked from the public landing page) | Implemented |
-| Role-specific attendance dashboards and password changes | Implemented |
-| Role-specific view organization under `app/Views/pages/{admin,instructor,student}` | Implemented; shared shell and forms use layouts/partials |
-| Dashboard view-data contract across Admin, Instructor, and Student pages | Implemented and covered by render regression tests |
+| Role-specific attendance pages and password changes | Implemented |
+| Destination-specific controllers and views | Implemented; shared shell and reusable forms use layouts/partials |
+| Model-backed validation for programs, courses, accounts, assignments, schedules, and enrolments | Implemented |
+| QR scanner submission endpoint | Removed; scanner integration is left for the project owner |
 | Admin CRUD for programs, courses, students, and instructors | Implemented |
 | Instructor class roster add/edit/remove | Implemented; removal un-enrols from the instructor's assigned classes |
 | Weekly instructor attendance windows for an assigned program/course and weekday | Implemented; existing one-time schedules are preserved |
-| JSON attendance endpoint for ESP32 ID/Role submissions, protected by a device key and schedule/account checks | Implemented; hardware integration not yet field-tested |
 | Scheduled automatic close of expired attendance windows | Implemented as a CLI command; configure an OS scheduler |
-| Browser QR camera scanner | Not used; the ESP32 device sends attendance data directly |
+| Browser QR camera scanner | Not included |
 | Admin UI for faculty/course/program assignments | Implemented on the Instructors page using the existing assignment tables |
 
 **Progress update requirement:** Every AI agent or contributor who changes this project must update this table and the related setup/feature notes in this README before finishing. Record what changed, what was verified, and any remaining setup or limitations. Do not mark a feature complete unless it has been run or tested.
 
-**Latest implementation note:** Instructors select a recurring weekday (Monday-Sunday) instead of a class date. New weekly schedules are matched by weekday for ESP32 check-ins and auto-close; existing date-specific schedules remain valid on their original date. Attendance submissions use the JSON endpoint and require `ATTENDANCE_DEVICE_API_KEY`; browser camera scanning and participant-session requirements are removed. Views are separated by role under `app/Views/pages/`, with a shared layout and reusable components. Validation passed: 15 PHPUnit tests (89 assertions), PHP syntax checks, and route listing. Physical ESP32/hardware integration has not yet been field-tested.
+**Latest implementation note:** Instructors select a recurring weekday (Monday-Sunday) instead of a class date. Existing date-specific schedules remain valid on their original date. Every navigation destination has its own controller and view, while shared layout and reusable components avoid duplicating presentation. Entity validation rules live in models. The QR scan API route and its device-key setup have been removed; implement the scanner submission flow separately. Verification passed: 6 focused PHPUnit tests (54 assertions), PHP syntax checks, route listing, login-page smoke checks, and confirmation that the removed endpoint returns 404. The full database-backed test suite was not run because PHP's `sqlite3` extension is unavailable in this environment.
 
 ## Application structure
 
-- `app/Controllers/` contains request handling and role/business logic.
-- `app/Views/pages/admin/`, `instructor/`, and `student/` contain each role's dashboard views; `pages/home.php` and `pages/login.php` are shared public pages.
+- `app/Controllers/` contains destination-specific controllers and shared portal workflows.
+- `app/Models/` contains data models and their validation rules.
+- `app/Views/pages/admin/`, `instructor/`, and `student/` contain destination-specific pages; each sign-in role has its own view.
 - `app/Views/layouts/` contains the common page shell. `app/Views/partials/` contains shared navigation, footer, authentication, attendance, and resource-management components.
 - `app/Database/Migrations/` and `app/Database/Seeds/` contain schema and starter data; `app/Commands/` contains the scheduled attendance closeout command.
 
@@ -49,15 +50,13 @@ A CodeIgniter 4 application for role-based student and instructor attendance, us
    The attendance workflow migration widens the existing password fields, hashes any legacy plaintext passwords, and creates `attendance_schedules` and `attendance_records`. The following migration adds `day_of_week` for recurring weekly schedules without changing legacy one-time schedule rows.
 5. To load the sample records and initial admin, set `ATTENDANCE_ADMIN_USERNAME`, `ATTENDANCE_ADMIN_EMAIL`, `ATTENDANCE_ADMIN_PASSWORD`, and `ATTENDANCE_INITIAL_PASSWORD` in the local environment, then run `php spark db:seed InitialData` once. The seed includes example programs, courses, instructors, students, instructor levels, and enrollment reference data. Do not use sample accounts in production.
 6. Add program and course master records, instructor accounts, and instructor levels. Use the assignment panel on the Instructors page to map each instructor to the program/course they teach. Student enrollment requires the existing reference records in `year`, `school_year`, `semesters`, and `sections`.
-7. Set `appTimezone` in `app/Config/App.php` to the campus timezone so schedule checks and scans use campus local time. Point the web server document root to `public/`, then run locally with:
+7. Set `appTimezone` in `app/Config/App.php` to the campus timezone so schedule checks use campus local time. Point the web server document root to `public/`, then run locally with:
 
    ```sh
    php spark serve
    ```
 
 The database connection defaults in `app/Config/Database.php` are intentionally blank; set credentials in the local environment rather than source control.
-
-Set `ATTENDANCE_DEVICE_API_KEY` in the server's environment or `.env` to a random secret of at least 32 characters. Generate one with `php -r "echo bin2hex(random_bytes(32)), PHP_EOL;"`. Keep it out of source control and configure the same value in the ESP32 firmware as an `X-Device-Key` request header. Use HTTPS between the ESP32 and server.
 
 ## Role access
 
@@ -70,32 +69,9 @@ Students and instructors sign in with their numeric account ID and password. Adm
 
 The initial data seeder requires `ATTENDANCE_ADMIN_USERNAME`, `ATTENDANCE_ADMIN_EMAIL`, `ATTENDANCE_ADMIN_PASSWORD`, and `ATTENDANCE_INITIAL_PASSWORD` to be set in the local environment. Use passwords of at least 8 characters and do not add them to source control. The shared initial password is used only when creating seeded demo student/instructor accounts; change those passwords after setup.
 
-## ESP32 attendance API
+## QR scanner integration
 
-The ESP32 sends an HTTP `POST` to `/api/Scan_QR_Code` with JSON. Uppercase keys and singular role values are accepted:
-
-```json
-{"ID": 123, "Role": "Student"}
-```
-
-For an instructor:
-
-```json
-{"ID": 12, "Role": "Instructor"}
-```
-
-Include the configured device secret in the `X-Device-Key` header. The ESP32 does not need a browser login or session cookie. Example request:
-
-```sh
-curl -X POST "https://your-host/api/Scan_QR_Code" \
-  -H "Content-Type: application/json" \
-  -H "X-Device-Key: YOUR_CONFIGURED_DEVICE_KEY" \
-  -d '{"ID":123,"Role":"Student"}'
-```
-
-The endpoint verifies the device key, validates the participant and role against the database, and requires a matching attendance schedule to be active for the current weekday and time (or on its original date for a legacy one-time schedule). It then toggles `in_campus` and records an `IN` or `OUT` event. Student check-ins also populate `student_time_ins`; instructor check-ins populate `instructor_time_in`. Instructors can check in once per day. A successful response includes `ok`, `role`, `id`, `status`, and `scanned_at`. Invalid JSON/fields, bad credentials, missing participants, inactive schedules, and other rejected scans return a JSON message with an appropriate HTTP error status.
-
-The ID/Role body is not itself authentication. Keep the device key private, use HTTPS, limit network access to the ESP32/device network where possible, and rotate the key if a device is lost or compromised. Do not send the key in the URL or JSON body.
+The QR scanner submission endpoint is not part of this application. Implement the scanner flow and its authentication/validation separately; the existing attendance schedule pages and records remain available.
 
 ## Automatic close of expired schedules
 

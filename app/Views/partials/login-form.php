@@ -1,6 +1,3 @@
-<?= $this->extend('layouts/layout') ?>
-
-<?= $this->section('content') ?>
 <section class="login-panel">
     <a class="back-link" href="<?= site_url('/') ?>">← All account types</a>
     <div class="eyebrow"><?= esc(ucfirst($role)) ?> Portal</div>
@@ -17,4 +14,3 @@
         <button class="button button-primary" type="submit">Sign in</button>
     </form>
 </section>
-<?= $this->endSection() ?>
