@@ -77,15 +77,21 @@ abstract class PortalController extends BaseController
             return redirect()->to('/');
         }
 
+        $identifier = trim((string) $this->request->getPost('identifier'));
+        $password = (string) $this->request->getPost('password');
+        if ($identifier === '' || $password === '') {
+            return redirect()->back()->withInput()->with('error', 'The account ID or password is incorrect.');
+        }
+
         $authenticatedRole = $this->authenticatedRole();
         if ($authenticatedRole !== null) {
             return redirect()->to($this->landingPath($authenticatedRole));
         }
 
+        session()->remove(['role', 'user_id', 'display_name']);
+
         $table = $role === 'admin' ? 'admin_accounts' : ($role === 'student' ? 'students' : 'instructors');
         $key = $role === 'admin' ? 'username' : ($role === 'student' ? 'student_id' : 'instructor_id');
-        $identifier = trim((string) $this->request->getPost('identifier'));
-        $password = (string) $this->request->getPost('password');
         $account = db_connect()->table($table)->where($key, $identifier)->get()->getRowArray();
 
         if ($account === null) {
@@ -114,6 +120,7 @@ abstract class PortalController extends BaseController
     public function logout()
     {
         auth()->logout();
+        session()->remove(['role', 'user_id', 'display_name']);
         return redirect()->to('/');
     }
 

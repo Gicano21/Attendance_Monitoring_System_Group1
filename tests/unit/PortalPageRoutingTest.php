@@ -10,6 +10,29 @@ final class PortalPageRoutingTest extends CIUnitTestCase
 {
     use FeatureTestTrait;
 
+    public function testShieldLoginAcceptsPortalUsernames(): void
+    {
+        $this->assertSame(['username'], config('Auth')->validFields);
+        $this->assertSame('portal_auth', config('Auth')->sessionConfig['field']);
+        $this->assertFalse(config('Auth')->sessionConfig['allowRemembering']);
+        $this->assertFalse(config('Auth')->allowRegistration);
+        $this->assertFalse(config('Auth')->allowMagicLinkLogins);
+    }
+
+    public function testLegacyRoleSessionDoesNotRenderAdminNavigation(): void
+    {
+        $this->withSession([
+            'role' => 'admin',
+            'user_id' => 1,
+            'display_name' => 'Admin',
+            'user' => ['id' => 1],
+        ]);
+
+        $response = $this->get('/');
+        $response->assertOK();
+        $response->assertDontSee('Instructors Attendance');
+    }
+
     public function testPublicHomeAndRoleLoginPagesRenderFromOrganizedViews(): void
     {
         foreach ([

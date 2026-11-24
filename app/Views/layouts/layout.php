@@ -8,7 +8,9 @@
 </head>
 <body>
     <?= $this->include('partials/navbar') ?>
-    <main class="<?= session()->get('role') ? 'app-main' : 'public-main' ?>">
+    <?php $authSessionField = config('Auth')->sessionConfig['field']; ?>
+    <?php $authSession = session($authSessionField) ?? []; ?>
+    <main class="<?= isset($authSession['id']) ? 'app-main' : 'public-main' ?>">
         <?php if ($message = session()->getFlashdata('success')): ?>
             <div class="notice notice-success"><?= esc($message) ?></div>
         <?php endif ?>
