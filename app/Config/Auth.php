@@ -158,7 +158,7 @@ class Auth extends ShieldAuth
      * --------------------------------------------------------------------
      * Determines whether users can register for the site.
      */
-    public bool $allowRegistration = true;
+    public bool $allowRegistration = false;
 
     /**
      * --------------------------------------------------------------------
@@ -182,7 +182,7 @@ class Auth extends ShieldAuth
      * could be modified as the only method of login once an account
      * has been set up.
      */
-    public bool $allowMagicLinkLogins = true;
+    public bool $allowMagicLinkLogins = false;
 
     /**
      * --------------------------------------------------------------------
@@ -208,8 +208,8 @@ class Auth extends ShieldAuth
      * @var array<string, bool|int|string>
      */
     public array $sessionConfig = [
-        'field'              => 'user',
-        'allowRemembering'   => true,
+        'field'              => 'portal_auth',
+        'allowRemembering'   => false,
         'rememberCookieName' => 'remember',
         'rememberLength'     => 30 * DAY,
     ];
@@ -285,8 +285,7 @@ class Auth extends ShieldAuth
      * Fields that are available to be used as credentials for login.
      */
     public array $validFields = [
-        'email',
-        // 'username',
+        'username',
     ];
 
     /**
