@@ -13,7 +13,7 @@ class EnrolmentTable extends Migration
             'student_id' => ['type' => 'INT', 'constraint' => 8],
             'program_id' => ['type' => 'INT', 'constraint' => 5],
             'year_id' => ['type' => 'INT', 'constraint' => 1],
-            'assigned_course_id' => ['type' => 'INT', 'constraint' => 10],//so the course is gonna be a
+            'assigned_course_id' => ['type' => 'INT', 'constraint' => 10],
             'school_year_id' => ['type' => 'INT', 'constraint' => 10],
             'semester_id' => ['type' => 'INT', 'constraint' => 1],
             'section_id' => ['type' => 'VARCHAR', 'constraint' => 8],

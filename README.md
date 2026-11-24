@@ -18,10 +18,13 @@ A CodeIgniter 4 application for role-based student and instructor attendance, wi
 | Scheduled automatic close of expired attendance windows | Implemented as a CLI command; configure an OS scheduler |
 | Browser QR camera scanner | Not included |
 | Admin UI for faculty/course/program assignments | Implemented on the Instructors page using the existing assignment tables |
+| Shield authentication and role-based authorization | Implemented for admin, instructor, and student accounts |
 
 **Progress update requirement:** Every AI agent or contributor who changes this project must update this table and the related setup/feature notes in this README before finishing. Record what changed, what was verified, and any remaining setup or limitations. Do not mark a feature complete unless it has been run or tested.
 
 **Latest implementation note:** Instructors select a recurring weekday (Monday-Sunday) instead of a class date. Existing date-specific schedules remain valid on their original date. Every navigation destination has its own controller and view, while shared layout and reusable components avoid duplicating presentation. Entity validation rules live in models. The QR scan API route and its device-key setup have been removed; implement the scanner submission flow separately. Verification passed: 6 focused PHPUnit tests (54 assertions), PHP syntax checks, route listing, login-page smoke checks, and confirmation that the removed endpoint returns 404. The full database-backed test suite was not run because PHP's `sqlite3` extension is unavailable in this environment.
+
+**Shield authentication update:** CodeIgniter Shield now authenticates all three portal roles, assigns role groups, protects role-specific routes, rate-limits login pages, and uses session-based CSRF. Existing account IDs and login pages are retained. The Shield account migration imports usable existing password hashes and converts legacy plaintext passwords; malformed or truncated legacy hashes are logged and must be reset. Verification: PHP syntax checks and route listing passed; the portal view/model tests passed (5 tests, 52 assertions). The role-route feature test could not run because the configured PHP lacks `sqlite3`.
 
 ## Application structure
 
@@ -41,13 +44,13 @@ A CodeIgniter 4 application for role-based student and instructor attendance, wi
    composer install
    ```
 
-4. Apply migrations:
+4. Apply application and Shield migrations:
 
    ```sh
-   php spark migrate
+   php spark migrate --all
    ```
 
-   The attendance workflow migration widens the existing password fields, hashes any legacy plaintext passwords, and creates `attendance_schedules` and `attendance_records`. The following migration adds `day_of_week` for recurring weekly schedules without changing legacy one-time schedule rows.
+   Shield creates its authentication and authorization tables. The portal migrations import existing admin, instructor, and student accounts into Shield and widen legacy password columns, including accounts created before Shield was installed. The attendance workflow migrations create `attendance_schedules` and `attendance_records`, hash legacy plaintext passwords, and add recurring weekdays without changing legacy one-time schedule rows. The initial-data seeder checks for the Shield tables before inserting any sample records.
 5. To load the sample records and initial admin, set `ATTENDANCE_ADMIN_USERNAME`, `ATTENDANCE_ADMIN_EMAIL`, `ATTENDANCE_ADMIN_PASSWORD`, and `ATTENDANCE_INITIAL_PASSWORD` in the local environment, then run `php spark db:seed InitialData` once. The seed includes example programs, courses, instructors, students, instructor levels, and enrollment reference data. Do not use sample accounts in production.
 6. Add program and course master records, instructor accounts, and instructor levels. Use the assignment panel on the Instructors page to map each instructor to the program/course they teach. Student enrollment requires the existing reference records in `year`, `school_year`, `semesters`, and `sections`.
 7. Set `appTimezone` in `app/Config/App.php` to the campus timezone so schedule checks use campus local time. Point the web server document root to `public/`, then run locally with:
@@ -65,7 +68,7 @@ The database connection defaults in `app/Config/Database.php` are intentionally 
 - Instructor sign-in: `/instructor`
 - Admin sign-in: `/myadmin/` (admin pages are under `/myadmin/...`; there is no public admin link)
 
-Students and instructors sign in with their numeric account ID and password. Admins sign in with their username and password. Accounts can change passwords after login. On successful sign-in, a legacy unhashed password is upgraded to a password hash.
+Students and instructors sign in with their numeric account ID and password. Admins sign in with their username and password. Shield's user and identity tables hold the login credentials; role-prefixed Shield usernames map each account to its existing profile row. Role groups protect the `/student/...`, `/instructor/...`, and `/myadmin/...` routes. Existing profile password columns remain synchronized for compatibility, but login verification is performed by Shield.
 
 The initial data seeder requires `ATTENDANCE_ADMIN_USERNAME`, `ATTENDANCE_ADMIN_EMAIL`, `ATTENDANCE_ADMIN_PASSWORD`, and `ATTENDANCE_INITIAL_PASSWORD` to be set in the local environment. Use passwords of at least 8 characters and do not add them to source control. The shared initial password is used only when creating seeded demo student/instructor accounts; change those passwords after setup.
 
@@ -108,7 +111,9 @@ For an existing installation:
 1. Take a verified full database backup and restore it to a disposable clone. Keep production untouched during reconciliation.
 2. Inspect the cloned schema and compare it with every `up()` method in `app/Database/Migrations` through `2026-11-11-064420_ProgramsAssignment.php`. Confirm all tables, columns, and later alterations from those legacy migrations are already present. A table-name-only check is not sufficient.
 3. If, and only if, the clone exactly contains the results of all those legacy migrations, baseline those **legacy versions only** in the configured CodeIgniter `migrations` history table. Use each filename's digits-only version, its class name, the configured database group (normally `default`), and namespace `App\Database\Migrations`. Keep the attendance workflow migration `2026-11-19-000001_AttendanceWorkflow` and the weekday migration `2026-11-19-000002_AddAttendanceScheduleDayOfWeek` unrecorded so CodeIgniter applies them normally.
-4. Run `php spark migrate` on the clone. Confirm the new migration succeeds, existing records remain intact, and legacy passwords authenticate after the hash upgrade. Only then repeat the reviewed baseline and migration steps against production during a planned backup window.
+4. Run `php spark migrate --all` on the clone. Confirm the Shield migration and portal-account import succeed, existing records remain intact, and valid legacy credentials authenticate. Only then repeat the reviewed baseline and migration steps against production during a planned backup window.
 5. If any legacy migration effect is missing or uncertain, stop and write/review a corrective migration for that schema difference. Do not mark the missing migration as applied.
+
+If an earlier `InitialData` seed attempt failed after inserting sample records because the Shield `users` table was missing, do not rerun the non-idempotent seeder. Run `php spark migrate --all`; the account synchronization migration will import the already-inserted profile accounts.
 
 If the database already has a `migrations` table, preserve its history and reconcile only after reviewing its rows. Never clear the table, invent batches, or mark versions applied based on table names alone. For new installations, use the normal `php spark migrate` command on an empty database; no baseline step is needed.

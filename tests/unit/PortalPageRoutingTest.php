@@ -23,4 +23,15 @@ final class PortalPageRoutingTest extends CIUnitTestCase
             $response->assertSee($heading);
         }
     }
+
+    public function testRolePortalsRequireShieldAuthentication(): void
+    {
+        foreach ([
+            '/myadmin/students',
+            '/instructor/attendance',
+            '/student/attendance',
+        ] as $path) {
+            $this->get($path)->assertRedirect();
+        }
+    }
 }

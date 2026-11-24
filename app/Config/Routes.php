@@ -3,49 +3,55 @@
 use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
-$routes->get('/', 'Home::index');
+$routes->get('/', 'Home::index', ['as' => 'login']);
 
-$routes->get('student', 'StudentLogin::index');
-$routes->post('student/login', 'StudentLogin::authenticate');
-$routes->get('instructor', 'InstructorLogin::index');
-$routes->post('instructor/login', 'InstructorLogin::authenticate');
-$routes->get('myadmin', 'AdminLogin::index');
-$routes->get('myadmin/', 'AdminLogin::index');
-$routes->post('myadmin/login', 'AdminLogin::authenticate');
+$routes->get('student', 'StudentLogin::index', ['filter' => 'auth-rates']);
+$routes->post('student/login', 'StudentLogin::authenticate', ['filter' => 'auth-rates']);
+$routes->get('instructor', 'InstructorLogin::index', ['filter' => 'auth-rates']);
+$routes->post('instructor/login', 'InstructorLogin::authenticate', ['filter' => 'auth-rates']);
+$routes->get('myadmin', 'AdminLogin::index', ['filter' => 'auth-rates']);
+$routes->get('myadmin/', 'AdminLogin::index', ['filter' => 'auth-rates']);
+$routes->post('myadmin/login', 'AdminLogin::authenticate', ['filter' => 'auth-rates']);
 $routes->get('logout', 'Logout::index');
 
-$routes->get('myadmin/attendance', 'AdminAttendance::index');
-$routes->get('myadmin/instructors', 'AdminInstructors::index');
-$routes->get('myadmin/instructors/edit/(:num)', 'AdminInstructors::edit/$1');
-$routes->post('myadmin/instructors/save', 'AdminInstructors::save');
-$routes->post('myadmin/instructors/delete/(:num)', 'AdminInstructors::delete/$1');
-$routes->post('myadmin/assignments/save', 'AdminInstructors::saveAssignment');
-$routes->post('myadmin/assignments/delete/(:num)', 'AdminInstructors::deleteAssignment/$1');
-$routes->get('myadmin/students', 'AdminStudents::index');
-$routes->get('myadmin/students/edit/(:num)', 'AdminStudents::edit/$1');
-$routes->post('myadmin/students/save', 'AdminStudents::save');
-$routes->post('myadmin/students/delete/(:num)', 'AdminStudents::delete/$1');
-$routes->get('myadmin/programs', 'AdminPrograms::index');
-$routes->get('myadmin/programs/edit/(:num)', 'AdminPrograms::edit/$1');
-$routes->post('myadmin/programs/save', 'AdminPrograms::save');
-$routes->post('myadmin/programs/delete/(:num)', 'AdminPrograms::delete/$1');
-$routes->get('myadmin/courses', 'AdminCourses::index');
-$routes->get('myadmin/courses/edit/(:num)', 'AdminCourses::edit/$1');
-$routes->post('myadmin/courses/save', 'AdminCourses::save');
-$routes->post('myadmin/courses/delete/(:num)', 'AdminCourses::delete/$1');
-$routes->get('myadmin/change-authentication', 'AdminAuthentication::index');
-$routes->post('myadmin/change-authentication', 'AdminAuthentication::update');
+$routes->group('myadmin', ['filter' => 'group:admin'], static function (RouteCollection $routes): void {
+    $routes->get('attendance', 'AdminAttendance::index');
+    $routes->get('instructors', 'AdminInstructors::index');
+    $routes->get('instructors/edit/(:num)', 'AdminInstructors::edit/$1');
+    $routes->post('instructors/save', 'AdminInstructors::save');
+    $routes->post('instructors/delete/(:num)', 'AdminInstructors::delete/$1');
+    $routes->post('assignments/save', 'AdminInstructors::saveAssignment');
+    $routes->post('assignments/delete/(:num)', 'AdminInstructors::deleteAssignment/$1');
+    $routes->get('students', 'AdminStudents::index');
+    $routes->get('students/edit/(:num)', 'AdminStudents::edit/$1');
+    $routes->post('students/save', 'AdminStudents::save');
+    $routes->post('students/delete/(:num)', 'AdminStudents::delete/$1');
+    $routes->get('programs', 'AdminPrograms::index');
+    $routes->get('programs/edit/(:num)', 'AdminPrograms::edit/$1');
+    $routes->post('programs/save', 'AdminPrograms::save');
+    $routes->post('programs/delete/(:num)', 'AdminPrograms::delete/$1');
+    $routes->get('courses', 'AdminCourses::index');
+    $routes->get('courses/edit/(:num)', 'AdminCourses::edit/$1');
+    $routes->post('courses/save', 'AdminCourses::save');
+    $routes->post('courses/delete/(:num)', 'AdminCourses::delete/$1');
+    $routes->get('change-authentication', 'AdminAuthentication::index');
+    $routes->post('change-authentication', 'AdminAuthentication::update');
+});
 
-$routes->get('instructor/attendance', 'InstructorAttendance::index');
-$routes->get('instructor/students', 'InstructorStudents::index');
-$routes->get('instructor/students/edit/(:num)', 'InstructorStudents::edit/$1');
-$routes->post('instructor/students/save', 'InstructorStudents::save');
-$routes->post('instructor/students/delete/(:num)', 'InstructorStudents::delete/$1');
-$routes->get('instructor/schedules', 'InstructorSchedules::index');
-$routes->post('instructor/schedules/save', 'InstructorSchedules::save');
-$routes->get('instructor/change-authentication', 'InstructorAuthentication::index');
-$routes->post('instructor/change-authentication', 'InstructorAuthentication::update');
+$routes->group('instructor', ['filter' => 'group:instructor'], static function (RouteCollection $routes): void {
+    $routes->get('attendance', 'InstructorAttendance::index');
+    $routes->get('students', 'InstructorStudents::index');
+    $routes->get('students/edit/(:num)', 'InstructorStudents::edit/$1');
+    $routes->post('students/save', 'InstructorStudents::save');
+    $routes->post('students/delete/(:num)', 'InstructorStudents::delete/$1');
+    $routes->get('schedules', 'InstructorSchedules::index');
+    $routes->post('schedules/save', 'InstructorSchedules::save');
+    $routes->get('change-authentication', 'InstructorAuthentication::index');
+    $routes->post('change-authentication', 'InstructorAuthentication::update');
+});
 
-$routes->get('student/attendance', 'StudentAttendance::index');
-$routes->get('student/change-authentication', 'StudentAuthentication::index');
-$routes->post('student/change-authentication', 'StudentAuthentication::update');
+$routes->group('student', ['filter' => 'group:student'], static function (RouteCollection $routes): void {
+    $routes->get('attendance', 'StudentAttendance::index');
+    $routes->get('change-authentication', 'StudentAuthentication::index');
+    $routes->post('change-authentication', 'StudentAuthentication::update');
+});

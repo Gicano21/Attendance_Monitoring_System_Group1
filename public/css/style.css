@@ -299,6 +299,48 @@ select:focus {
   gap: 16px;
   margin-top: 20px;
 }
+.course-assignment-fieldset {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.student-enrolment-note {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+.course-assignment-fieldset legend {
+  margin-bottom: 7px;
+  color: #425164;
+  font-size: 12px;
+  font-weight: 650;
+}
+.course-checkbox-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+.course-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 43px;
+  padding: 9px 12px;
+  background: white;
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
+}
+.course-checkbox input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+}
+.course-checkbox span {
+  font-size: 13px;
+}
 .form-actions {
   display: flex;
   grid-column: 1 / -1;

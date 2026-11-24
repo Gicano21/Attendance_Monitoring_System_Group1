@@ -14,7 +14,7 @@ class InstructorsTable extends Migration
             'middle_name' => ['type' => 'VARCHAR', 'constraint' => 50],
             'first_name' => ['type' => 'VARCHAR', 'constraint' => 50],
             'extension_name' => ['type' => 'VARCHAR', 'constraint' => 50],
-            'gender' => ['type' => 'VARCHAR', 'constraint' => 6],
+            'gender' => ['type' => 'ENUM', 'constraint' => ['Male', 'Female']],
             'birth_date' => ['type' => 'DATE'],
             'password' => ['type' => 'VARCHAR', 'constraint' => 50],
             'in_campus' => ['type' => 'BOOLEAN', 'NULL' => false],

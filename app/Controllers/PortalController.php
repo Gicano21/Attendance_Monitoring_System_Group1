@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use App\Services\PortalIdentityService;
 use App\Models\AttendanceScheduleModel;
 use App\Models\CourseModel;
 use App\Models\EnrolmentModel;
@@ -59,8 +60,9 @@ abstract class PortalController extends BaseController
             return redirect()->to('/');
         }
 
-        if (session()->get('role') === $role) {
-            return redirect()->to($this->landingPath($role));
+        $authenticatedRole = $this->authenticatedRole();
+        if ($authenticatedRole !== null) {
+            return redirect()->to($this->landingPath($authenticatedRole));
         }
 
         return view('pages/login/' . $role, [
@@ -75,27 +77,35 @@ abstract class PortalController extends BaseController
             return redirect()->to('/');
         }
 
+        $authenticatedRole = $this->authenticatedRole();
+        if ($authenticatedRole !== null) {
+            return redirect()->to($this->landingPath($authenticatedRole));
+        }
+
         $table = $role === 'admin' ? 'admin_accounts' : ($role === 'student' ? 'students' : 'instructors');
         $key = $role === 'admin' ? 'username' : ($role === 'student' ? 'student_id' : 'instructor_id');
         $identifier = trim((string) $this->request->getPost('identifier'));
         $password = (string) $this->request->getPost('password');
         $account = db_connect()->table($table)->where($key, $identifier)->get()->getRowArray();
 
-        if ($account === null || !$this->passwordMatches((string) $account['password'], $password)) {
+        if ($account === null) {
             return redirect()->back()->withInput()->with('error', 'The account ID or password is incorrect.');
         }
 
-        if (password_get_info((string) $account['password'])['algo'] === null) {
-            db_connect()->table($table)
-                ->where($key, $account[$key])
-                ->update(['password' => password_hash($password, PASSWORD_DEFAULT)]);
+        $id = (int) $account[$role === 'admin' ? 'admin_id' : ($role === 'student' ? 'student_id' : 'instructor_id')];
+        $username = (new PortalIdentityService())->usernameFor($role, $id);
+        $result = auth()->attempt(['username' => $username, 'password' => $password]);
+        $user = auth()->user();
+        if (!$result->isOK() || $user === null || !$user->inGroup($role)) {
+            if ($user !== null) {
+                auth()->logout();
+            }
+            return redirect()->back()->withInput()->with('error', 'The account ID or password is incorrect.');
         }
 
-        $id = (int) $account[$role === 'admin' ? 'admin_id' : ($role === 'student' ? 'student_id' : 'instructor_id')];
         $name = $role === 'admin'
             ? $account['username']
             : trim(($account['first_name'] ?? '') . ' ' . ($account['last_name'] ?? ''));
-        session()->regenerate();
         session()->set(['role' => $role, 'user_id' => $id, 'display_name' => $name]);
 
         return redirect()->to($this->landingPath($role));
@@ -103,16 +113,17 @@ abstract class PortalController extends BaseController
 
     public function logout()
     {
-        session()->destroy();
+        auth()->logout();
         return redirect()->to('/');
     }
 
     public function dashboard(string $page = 'attendance')
     {
-        $role = (string) session()->get('role');
-        if (!in_array($role, ['admin', 'student', 'instructor'], true)) {
+        $role = $this->authenticatedRole();
+        if ($role === null) {
             return redirect()->to('/');
         }
+        $userId = $this->authenticatedAccountId();
         if ($role === 'student' && $page !== 'attendance') {
             return redirect()->to('student/attendance');
         }
@@ -130,20 +141,20 @@ abstract class PortalController extends BaseController
                 ->orderBy('i.last_name')->get()->getResultArray();
             $data['records'] = $this->attendanceRecords();
         } elseif ($page === 'attendance') {
-            $data['records'] = $this->attendanceRecords($role, (int) session()->get('user_id'));
+            $data['records'] = $this->attendanceRecords($role, $userId);
             if ($role === 'instructor') {
                 $data['rows'] = db_connect()->table('attendance_schedules s')
                     ->select('s.*, p.program_acronym, c.course_acronym')
                     ->join('faculty f', 'f.faculty_id = s.faculty_id')
                     ->join('programs p', 'p.program_id = s.program_id')
                     ->join('courses c', 'c.course_id = s.course_id')
-                    ->where('f.instructor_id', session()->get('user_id'))
+                    ->where('f.instructor_id', $userId)
                     ->orderBy('s.day_of_week', 'ASC')
                     ->orderBy('s.starts_at', 'ASC')->get()->getResultArray();
             }
         } elseif ($role === 'instructor' && $page === 'students') {
-            $data['rows'] = $this->instructorRoster((int) session()->get('user_id'));
-            $data['assignments'] = $this->instructorAssignments((int) session()->get('user_id'));
+            $data['rows'] = $this->instructorRoster($userId);
+            $data['assignments'] = $this->instructorAssignments($userId);
             $data['lookup'] = $this->enrolmentOptions();
         } else {
             $config = self::RESOURCE_FIELDS[$page];
@@ -165,7 +176,7 @@ abstract class PortalController extends BaseController
 
     protected function dashboardForRole(string $role, string $page)
     {
-        if (session()->get('role') !== $role) {
+        if ($this->authenticatedRole() !== $role) {
             return redirect()->to('/');
         }
 
@@ -174,7 +185,7 @@ abstract class PortalController extends BaseController
 
     public function editResource(string $resource, int $id)
     {
-        $role = (string) session()->get('role');
+        $role = $this->authenticatedRole() ?? '';
         if ($role !== 'admin' && !($role === 'instructor' && $resource === 'students')) {
             return redirect()->to('/');
         }
@@ -184,7 +195,7 @@ abstract class PortalController extends BaseController
             return redirect()->to($this->landingPath($role));
         }
 
-        if ($role === 'instructor' && !$this->instructorCanManageStudent($id, (int) session()->get('user_id'))) {
+        if ($role === 'instructor' && !$this->instructorCanManageStudent($id, $this->authenticatedAccountId())) {
             return redirect()->to('instructor/students')->with('error', 'That student is not in your assigned roster.');
         }
 
@@ -199,13 +210,20 @@ abstract class PortalController extends BaseController
         $data['columns'] = $config['fields'];
         $data['labels'] = $config['labels'];
         $data['record'] = $record;
+        if ($resource === 'students') {
+            $data['lookup'] = $this->enrolmentOptions();
+            $data['enrolments'] = $this->studentEnrolments($id);
+        } elseif ($resource === 'instructors') {
+            $data['assignments'] = $this->facultyAssignments($id);
+            $data['lookup'] = $this->facultyAssignmentOptions();
+        }
 
         return view('pages/' . $role . '/' . $resource, $data);
     }
 
     public function saveResource(string $resource)
     {
-        $role = (string) session()->get('role');
+        $role = $this->authenticatedRole() ?? '';
         if ($role !== 'admin' && !($role === 'instructor' && $resource === 'students')) {
             return redirect()->to('/');
         }
@@ -216,7 +234,7 @@ abstract class PortalController extends BaseController
         }
 
         $id = (int) $this->request->getPost('id');
-        if ($role === 'instructor' && $id > 0 && !$this->instructorCanManageStudent($id, (int) session()->get('user_id'))) {
+        if ($role === 'instructor' && $id > 0 && !$this->instructorCanManageStudent($id, $this->authenticatedAccountId())) {
             return redirect()->to('instructor/students')->with('error', 'That student is not in your assigned roster.');
         }
 
@@ -236,41 +254,135 @@ abstract class PortalController extends BaseController
         }
 
         $isAccount = in_array($resource, ['students', 'instructors'], true);
+        $newPassword = null;
         if ($isAccount && $id === 0) {
-            $password = (string) $this->request->getPost('password');
-            if (strlen($password) < 8) {
+            $newPassword = (string) $this->request->getPost('password');
+            if (strlen($newPassword) < 8) {
                 return redirect()->back()->withInput()->with('error', 'Initial passwords must contain at least 8 characters.');
             }
-            $values['password'] = password_hash($password, PASSWORD_DEFAULT);
+            $values['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
             $values['in_campus'] = false;
         } elseif ($isAccount) {
-            $password = (string) $this->request->getPost('password');
-            if (strlen($password) > 0) {
-                if (strlen($password) < 8) {
+            $submittedPassword = (string) $this->request->getPost('password');
+            if ($submittedPassword !== '') {
+                if (strlen($submittedPassword) < 8) {
                     return redirect()->back()->withInput()->with('error', 'Passwords must contain at least 8 characters.');
                 }
-                $values['password'] = password_hash($password, PASSWORD_DEFAULT);
+                $newPassword = $submittedPassword;
+                $values['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
             }
         }
 
         $db = db_connect();
+        $enrolments = [];
+        $existingEnrolments = [];
+        $transactionStarted = false;
+        if ($resource === 'students' && ($id === 0 || $role === 'admin')) {
+            $programId = (int) $this->request->getPost('program_id');
+            $courseIds = $role === 'admin'
+                ? $this->request->getPost('course_ids')
+                : [$this->request->getPost('course_id')];
+            if (!is_array($courseIds) || $courseIds === []) {
+                return redirect()->back()->withInput()->with('error', 'Choose a program and at least one course assignment.');
+            }
+
+            $normalizedCourseIds = [];
+            foreach ($courseIds as $courseId) {
+                $courseId = is_scalar($courseId) ? filter_var($courseId, FILTER_VALIDATE_INT) : false;
+                if ($courseId === false || $courseId < 1) {
+                    return redirect()->back()->withInput()->with('error', 'Choose valid course assignments.');
+                }
+                $normalizedCourseIds[] = (int) $courseId;
+            }
+            if (count(array_unique($normalizedCourseIds)) !== count($normalizedCourseIds)) {
+                return redirect()->back()->withInput()->with('error', 'Choose each course assignment only once.');
+            }
+
+            $db->transStart();
+            $transactionStarted = true;
+            if ($id > 0) {
+                foreach ($this->studentEnrolments($id) as $existingEnrolment) {
+                    $courseId = (int) $existingEnrolment['course_id'];
+                    if (isset($existingEnrolments[$courseId])) {
+                        $db->transRollback();
+                        return redirect()->back()->withInput()->with('error', 'This student has multiple enrolment records for one course; edit those records separately.');
+                    }
+                    $existingEnrolments[$courseId] = $existingEnrolment;
+                }
+            }
+            foreach ($normalizedCourseIds as $courseId) {
+                $assignment = $this->validStudentAssignment($role, $courseId, $programId);
+                if ($assignment === null) {
+                    $db->transRollback();
+                    return redirect()->back()->withInput()->with('error', 'Choose an existing program and course.');
+                }
+                if ($role === 'admin') {
+                    $this->ensureCourseAssignment($courseId, 'student');
+                    if ($db->error()['code'] !== 0) {
+                        $db->transRollback();
+                        return redirect()->back()->withInput()->with('error', 'The selected course assignment could not be prepared.');
+                    }
+                }
+                $enrolment = $this->enrolmentValues($assignment);
+                if ($enrolment === null) {
+                    $db->transRollback();
+                    return redirect()->back()->withInput()->with('error', 'Choose valid course assignments and complete the enrolment fields.');
+                }
+                $enrolments[$courseId] = $enrolment;
+            }
+        }
+
         if ($id > 0) {
+            if ($isAccount && $newPassword !== null && !$transactionStarted) {
+                $db->transStart();
+                $transactionStarted = true;
+            }
             $builder = $db->table($config['table']);
             $builder->where($config['primary'], $id)->update($values);
-        } else {
-            $db->transStart();
-            $db->table($config['table'])->insert($values);
-            $studentId = (int) $db->insertID();
-            if ($resource === 'students') {
-                $courseId = (int) $this->request->getPost('course_id');
-                $programId = (int) $this->request->getPost('program_id');
-                $assignment = $this->validStudentAssignment($role, $courseId, $programId);
-                $enrolment = $this->enrolmentValues($assignment);
-                if ($assignment === null || $enrolment === null) {
-                    $db->transRollback();
-                    return redirect()->back()->withInput()->with('error', 'Choose a valid assigned Program/Course and complete the enrolment fields.');
+            if ($transactionStarted) {
+                foreach ($existingEnrolments as $courseId => $existingEnrolment) {
+                    if (isset($enrolments[$courseId])) {
+                        continue;
+                    }
+                    if ($db->tableExists('student_time_ins')
+                        && $db->table('student_time_ins')
+                            ->where('enrolment_id', $existingEnrolment['enrolment_id'])
+                            ->countAllResults() > 0) {
+                        $db->transRollback();
+                        return redirect()->back()->withInput()->with('error', 'A course assignment with attendance history cannot be removed.');
+                    }
+                    $db->table('enrolments')
+                        ->where('enrolment_id', $existingEnrolment['enrolment_id'])
+                        ->delete();
                 }
-                $enrolment['student_id'] = $studentId;
+                foreach ($enrolments as $courseId => $enrolment) {
+                    if (isset($existingEnrolments[$courseId])) {
+                        $db->table('enrolments')
+                            ->where('enrolment_id', $existingEnrolments[$courseId]['enrolment_id'])
+                            ->update($enrolment);
+                    } else {
+                        $enrolment['student_id'] = $id;
+                        $db->table('enrolments')->insert($enrolment);
+                    }
+                }
+                if ($isAccount && $newPassword !== null) {
+                    $accountRole = $resource === 'students' ? 'student' : 'instructor';
+                    (new PortalIdentityService())->updatePassword($accountRole, $id, $newPassword);
+                }
+                $db->transComplete();
+            }
+        } else {
+            if (!$transactionStarted) {
+                $db->transStart();
+            }
+            $db->table($config['table'])->insert($values);
+            $recordId = (int) $db->insertID();
+            if ($isAccount && $newPassword !== null) {
+                $accountRole = $resource === 'students' ? 'student' : 'instructor';
+                (new PortalIdentityService())->createAccount($accountRole, $recordId, $newPassword);
+            }
+            foreach ($enrolments as $enrolment) {
+                $enrolment['student_id'] = $recordId;
                 $db->table('enrolments')->insert($enrolment);
             }
             $db->transComplete();
@@ -285,7 +397,7 @@ abstract class PortalController extends BaseController
 
     public function deleteResource(string $resource, int $id)
     {
-        $role = (string) session()->get('role');
+        $role = $this->authenticatedRole() ?? '';
         if ($role !== 'admin' && !($role === 'instructor' && $resource === 'students')) {
             return redirect()->to('/');
         }
@@ -294,12 +406,12 @@ abstract class PortalController extends BaseController
         if ($config === null) {
             return redirect()->to($this->landingPath($role));
         }
-        if ($role === 'instructor' && !$this->instructorCanManageStudent($id, (int) session()->get('user_id'))) {
+        if ($role === 'instructor' && !$this->instructorCanManageStudent($id, $this->authenticatedAccountId())) {
             return redirect()->to('instructor/students')->with('error', 'That student is not in your assigned roster.');
         }
 
         if ($role === 'instructor' && $resource === 'students') {
-            $assignments = $this->instructorAssignments((int) session()->get('user_id'));
+            $assignments = $this->instructorAssignments($this->authenticatedAccountId());
             $conditions = [];
             foreach ($assignments as $assignment) {
                 $conditions[] = '(e.program_id = ' . (int) $assignment['program_id']
@@ -328,22 +440,27 @@ abstract class PortalController extends BaseController
             return redirect()->to($this->landingPath($role, $resource))
                 ->with('error', 'This record is still in use and cannot be deleted.');
         }
+        if ($resource === 'students' || $resource === 'instructors') {
+            $accountRole = $resource === 'students' ? 'student' : 'instructor';
+            (new PortalIdentityService())->deleteAccount($accountRole, $id);
+        }
         return redirect()->to($this->landingPath($role, $resource))->with('success', 'Deleted successfully.');
     }
 
     public function schedules()
     {
-        if (session()->get('role') !== 'instructor') {
+        if ($this->authenticatedRole() !== 'instructor') {
             return redirect()->to('/');
         }
 
-        $assignments = $this->instructorAssignments((int) session()->get('user_id'));
+        $instructorId = $this->authenticatedAccountId();
+        $assignments = $this->instructorAssignments($instructorId);
         $rows = db_connect()->table('attendance_schedules s')
             ->select('s.*, p.program_acronym, c.course_acronym')
             ->join('faculty f', 'f.faculty_id = s.faculty_id')
             ->join('programs p', 'p.program_id = s.program_id')
             ->join('courses c', 'c.course_id = s.course_id')
-            ->where('f.instructor_id', session()->get('user_id'))
+            ->where('f.instructor_id', $instructorId)
             ->orderBy('s.day_of_week', 'ASC')
             ->orderBy('s.starts_at', 'ASC')->get()->getResultArray();
 
@@ -356,11 +473,14 @@ abstract class PortalController extends BaseController
 
     public function saveFacultyAssignment()
     {
-        if (session()->get('role') !== 'admin') {
+        if ($this->authenticatedRole() !== 'admin') {
             return redirect()->to('/');
         }
 
         $instructorId = (int) $this->request->getPost('instructor_id');
+        $returnPath = $this->request->getPost('return_to') === 'edit' && $instructorId > 0
+            ? 'myadmin/instructors/edit/' . $instructorId
+            : 'myadmin/instructors';
         $programId = (int) $this->request->getPost('program_id');
         $courseId = (int) $this->request->getPost('course_id');
         $levelId = (int) $this->request->getPost('instructor_level_id');
@@ -373,14 +493,14 @@ abstract class PortalController extends BaseController
             'program_id' => $programId,
             'course_id' => $courseId,
         ])) {
-            return redirect()->to('myadmin/instructors')->with('error', 'Choose an existing instructor, level, program, and course.');
+            return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, and course.');
         }
 
         if ($db->table('instructors')->where('instructor_id', $instructorId)->countAllResults() === 0
             || $db->table('programs')->where('program_id', $programId)->countAllResults() === 0
             || $db->table('courses')->where('course_id', $courseId)->countAllResults() === 0
             || $db->table('instructor_levels')->where('instructor_level_id', $levelId)->countAllResults() === 0) {
-            return redirect()->to('myadmin/instructors')->with('error', 'Choose an existing instructor, level, program, and course.');
+            return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, and course.');
         }
 
         $programAssignmentId = $this->ensureProgramAssignment($programId);
@@ -393,7 +513,7 @@ abstract class PortalController extends BaseController
             ->where('assigned_course_id', $instructorCourseAssignmentId)
             ->countAllResults();
         if ($exists > 0) {
-            return redirect()->to('myadmin/instructors')->with('error', 'This instructor assignment already exists.');
+            return redirect()->to($returnPath)->with('error', 'This instructor assignment already exists.');
         }
 
         $db->table('faculty')->insert([
@@ -403,27 +523,35 @@ abstract class PortalController extends BaseController
             'assigned_course_id' => $instructorCourseAssignmentId,
         ]);
         if ($db->error()['code'] !== 0) {
-            return redirect()->to('myadmin/instructors')->with('error', 'The instructor assignment could not be saved.');
+            return redirect()->to($returnPath)->with('error', 'The instructor assignment could not be saved.');
         }
-        return redirect()->to('myadmin/instructors')->with('success', 'Instructor assigned to the Program/Course.');
+        return redirect()->to($returnPath)->with('success', 'Instructor assigned to the Program/Course.');
     }
 
     public function deleteFacultyAssignment(int $facultyId)
     {
-        if (session()->get('role') !== 'admin') {
+        if ($this->authenticatedRole() !== 'admin') {
             return redirect()->to('/');
         }
 
-        if (db_connect()->table('attendance_schedules')->where('faculty_id', $facultyId)->countAllResults() > 0) {
-            return redirect()->to('myadmin/instructors')->with('error', 'This assignment has attendance schedules and cannot be removed.');
+        $instructorId = (int) $this->request->getPost('instructor_id');
+        $returnPath = $this->request->getPost('return_to') === 'edit' && $instructorId > 0
+            ? 'myadmin/instructors/edit/' . $instructorId
+            : 'myadmin/instructors';
+        $db = db_connect();
+        if ($db->table('attendance_schedules')->where('faculty_id', $facultyId)->countAllResults() > 0) {
+            return redirect()->to($returnPath)->with('error', 'This assignment has attendance schedules and cannot be removed.');
         }
-        db_connect()->table('faculty')->where('faculty_id', $facultyId)->delete();
-        return redirect()->to('myadmin/instructors')->with('success', 'Instructor assignment removed.');
+        $db->table('faculty')->where('faculty_id', $facultyId)->delete();
+        if ($db->error()['code'] !== 0) {
+            return redirect()->to($returnPath)->with('error', 'The instructor assignment could not be removed.');
+        }
+        return redirect()->to($returnPath)->with('success', 'Instructor assignment removed.');
     }
 
     public function saveSchedule()
     {
-        if (session()->get('role') !== 'instructor') {
+        if ($this->authenticatedRole() !== 'instructor') {
             return redirect()->to('/');
         }
 
@@ -434,7 +562,7 @@ abstract class PortalController extends BaseController
         $start = (string) $this->request->getPost('starts_at');
         $end = (string) $this->request->getPost('ends_at');
         $assignment = null;
-        foreach ($this->instructorAssignments((int) session()->get('user_id')) as $candidate) {
+        foreach ($this->instructorAssignments($this->authenticatedAccountId()) as $candidate) {
             if ((int) $candidate['faculty_id'] === $facultyId
                 && (int) $candidate['program_id'] === $programId
                 && (int) $candidate['course_id'] === $courseId) {
@@ -499,7 +627,7 @@ abstract class PortalController extends BaseController
 
     public function changeAuthentication(string $role)
     {
-        if (session()->get('role') !== $role) {
+        if ($this->authenticatedRole() !== $role) {
             return redirect()->to('/');
         }
         return view('pages/' . $role . '/authentication', $this->dashboardViewData($role, 'authentication', 'Change Authentication'));
@@ -507,27 +635,37 @@ abstract class PortalController extends BaseController
 
     public function updateAuthentication(string $role)
     {
-        if (session()->get('role') !== $role) {
+        if ($this->authenticatedRole() !== $role) {
             return redirect()->to('/');
         }
 
         [$table, $key] = $this->accountTableAndKey($role);
+        $accountId = $this->authenticatedAccountId();
         $account = db_connect()->table($table)
-            ->where($key, session()->get('user_id'))->get()->getRowArray();
+            ->where($key, $accountId)->get()->getRowArray();
         $current = (string) $this->request->getPost('current_password');
         $new = (string) $this->request->getPost('new_password');
         $confirm = (string) $this->request->getPost('confirm_password');
+        $user = auth()->user();
+        $passwordHash = $user === null ? null : $user->getPasswordHash();
 
-        if ($account === null || !$this->passwordMatches((string) $account['password'], $current)) {
+        if ($account === null || $passwordHash === null || !service('passwords')->verify($current, $passwordHash)) {
             return redirect()->back()->with('error', 'Current password is incorrect.');
         }
         if (strlen($new) < 8 || $new !== $confirm) {
             return redirect()->back()->with('error', 'New passwords must match and contain at least 8 characters.');
         }
 
-        db_connect()->table($table)
-            ->where($key, session()->get('user_id'))
+        $db = db_connect();
+        $db->transStart();
+        $db->table($table)
+            ->where($key, $accountId)
             ->update(['password' => password_hash($new, PASSWORD_DEFAULT)]);
+        (new PortalIdentityService())->updatePassword($role, $accountId, $new);
+        $db->transComplete();
+        if ($db->transStatus() === false) {
+            return redirect()->back()->with('error', 'The password could not be updated. Try again.');
+        }
         return redirect()->to($this->landingPath($role))->with('success', 'Password updated.');
     }
 
@@ -560,9 +698,9 @@ abstract class PortalController extends BaseController
             ->get()->getResultArray();
     }
 
-    private function facultyAssignments(): array
+    private function facultyAssignments(?int $instructorId = null): array
     {
-        return db_connect()->table('faculty f')
+        $builder = db_connect()->table('faculty f')
             ->select('f.faculty_id, i.first_name, i.last_name, il.instructor_level, p.program_acronym, c.course_acronym')
             ->join('instructors i', 'i.instructor_id = f.instructor_id')
             ->join('instructor_levels il', 'il.instructor_level_id = f.instructor_level_id')
@@ -570,7 +708,11 @@ abstract class PortalController extends BaseController
             ->join('programs p', 'p.program_id = pa.program_id')
             ->join('courses_assignment ca', 'ca.assigned_course_id = f.assigned_course_id')
             ->join('courses c', 'c.course_id = ca.course_id')
-            ->orderBy('i.last_name')->get()->getResultArray();
+            ->orderBy('i.last_name');
+        if ($instructorId !== null) {
+            $builder->where('f.instructor_id', $instructorId);
+        }
+        return $builder->get()->getResultArray();
     }
 
     private function facultyAssignmentOptions(): array
@@ -655,17 +797,26 @@ abstract class PortalController extends BaseController
         $db = db_connect();
         return [
             'programs' => $db->table('programs')->orderBy('program_acronym')->get()->getResultArray(),
-            'courses' => $db->table('courses c')
-                ->select('c.course_id, c.course_acronym, c.course')
-                ->distinct()
-                ->join('courses_assignment ca', 'ca.course_id = c.course_id')
-                ->where('ca.role', 'student')
-                ->orderBy('c.course_acronym')->get()->getResultArray(),
+            'courses' => $db->table('courses')
+                ->select('course_id, course_acronym, course')
+                ->orderBy('course_acronym')->get()->getResultArray(),
             'years' => $db->table('year')->get()->getResultArray(),
             'school_years' => $db->table('school_year')->get()->getResultArray(),
             'semesters' => $db->table('semesters')->get()->getResultArray(),
             'sections' => $db->table('sections')->get()->getResultArray(),
         ];
+    }
+
+    private function studentEnrolments(int $studentId): array
+    {
+        return db_connect()->table('enrolments e')
+            ->select('e.*, ca.course_id, c.course_acronym, c.course')
+            ->join('courses_assignment ca', 'ca.assigned_course_id = e.assigned_course_id')
+            ->join('courses c', 'c.course_id = ca.course_id')
+            ->where('e.student_id', $studentId)
+            ->where('ca.role', 'student')
+            ->orderBy('c.course_acronym')
+            ->get()->getResultArray();
     }
 
     private function validStudentAssignment(string $role, int $courseId, int $programId): ?array
@@ -675,7 +826,7 @@ abstract class PortalController extends BaseController
         }
 
         if ($role === 'instructor') {
-            foreach ($this->instructorAssignments((int) session()->get('user_id')) as $assignment) {
+            foreach ($this->instructorAssignments($this->authenticatedAccountId()) as $assignment) {
                 if ((int) $assignment['course_id'] === $courseId && (int) $assignment['program_id'] === $programId) {
                     return $assignment;
                 }
@@ -683,9 +834,9 @@ abstract class PortalController extends BaseController
             return null;
         }
 
-        $programExists = db_connect()->table('programs')->where('program_id', $programId)->countAllResults() > 0;
-        $courseExists = db_connect()->table('courses_assignment')
-            ->where('course_id', $courseId)->where('role', 'student')->countAllResults() > 0;
+        $db = db_connect();
+        $programExists = $db->table('programs')->where('program_id', $programId)->countAllResults() > 0;
+        $courseExists = $db->table('courses')->where('course_id', $courseId)->countAllResults() > 0;
         if (!$programExists || !$courseExists) {
             return null;
         }
@@ -736,15 +887,24 @@ abstract class PortalController extends BaseController
         ];
     }
 
-    private function passwordMatches(string $stored, string $provided): bool
+    private function authenticatedRole(): ?string
     {
-        if ($stored === '' || $provided === '') {
-            return false;
+        $user = auth()->user();
+        if ($user === null || preg_match('/^(admin|instructor|student)_([1-9]\d*)$/', (string) $user->username, $matches) !== 1) {
+            return null;
         }
-        if (password_get_info($stored)['algo'] !== null) {
-            return password_verify($provided, $stored);
+
+        return $user->inGroup($matches[1]) ? $matches[1] : null;
+    }
+
+    private function authenticatedAccountId(): int
+    {
+        $user = auth()->user();
+        if ($user === null || preg_match('/^(admin|instructor|student)_([1-9]\d*)$/', (string) $user->username, $matches) !== 1) {
+            return 0;
         }
-        return hash_equals($stored, $provided);
+
+        return $this->authenticatedRole() === $matches[1] ? (int) $matches[2] : 0;
     }
 
     /**
@@ -764,6 +924,7 @@ abstract class PortalController extends BaseController
             'labels' => [],
             'rows' => [],
             'records' => [],
+            'enrolments' => [],
             'assignments' => [],
             'lookup' => [
                 'programs' => [],

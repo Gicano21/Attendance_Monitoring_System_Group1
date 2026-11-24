@@ -18,7 +18,7 @@
             <input type="hidden" name="faculty_id" id="roster-faculty"><input type="hidden" name="program_id" id="roster-program"><input type="hidden" name="course_id" id="roster-course">
             <label>First name<input name="first_name" required></label><label>Last name<input name="last_name" required></label>
             <label>Middle name<input name="middle_name"></label><label>Name extension<input name="extension_name"></label>
-            <label>Gender<input name="gender" maxlength="6" required></label><label>Birth date<input type="date" name="birth_date" required></label>
+            <label>Gender<select name="gender" required><option value="">Choose gender</option><option value="Male">Male</option><option value="Female">Female</option></select></label><label>Birth date<input type="date" name="birth_date" required></label>
             <label>Initial password<input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
             <label>Year level<select name="year_id" required><option value="">Choose a year</option><?php foreach ($lookup['years'] as $option): ?><option value="<?= esc($option['year_id']) ?>"><?= esc($option['year']) ?></option><?php endforeach ?></select></label>
             <label>School year<select name="school_year_id" required><option value="">Choose a school year</option><?php foreach ($lookup['school_years'] as $option): ?><option value="<?= esc($option['school_year_id']) ?>"><?= esc($option['year']) ?></option><?php endforeach ?></select></label>

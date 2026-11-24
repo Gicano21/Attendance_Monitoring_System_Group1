@@ -16,7 +16,7 @@ class InstructorModel extends Model
     protected $validationRules = [
         'first_name' => 'required',
         'last_name' => 'required',
-        'gender' => 'required|max_length[6]',
+        'gender' => 'required|in_list[Male,Female]',
         'birth_date' => 'required|valid_date[Y-m-d]',
     ];
 }

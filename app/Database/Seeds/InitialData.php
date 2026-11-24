@@ -2,18 +2,31 @@
 
 namespace App\Database\Seeds;
 
+use App\Services\PortalIdentityService;
 use CodeIgniter\Database\Seeder;
+use RuntimeException;
 
 class InitialData extends Seeder
 {
     public function run()
     {
-        $initialPassword = "password123"; // Default password for instructors and students
+        $identities = new PortalIdentityService();
+        $identities->assertShieldTablesExist();
+
+        $adminUsername = trim((string) env('ATTENDANCE_ADMIN_USERNAME'));
+        $adminEmail = trim((string) env('ATTENDANCE_ADMIN_EMAIL'));
+        $adminPassword = (string) env('ATTENDANCE_ADMIN_PASSWORD');
+        $initialPassword = (string) env('ATTENDANCE_INITIAL_PASSWORD');
+        if ($adminUsername === '' || $adminEmail === '' || strlen($adminPassword) < 8 || strlen($initialPassword) < 8) {
+            throw new RuntimeException(
+                'Set ATTENDANCE_ADMIN_USERNAME, ATTENDANCE_ADMIN_EMAIL, ATTENDANCE_ADMIN_PASSWORD, and ATTENDANCE_INITIAL_PASSWORD before seeding.',
+            );
+        }
 
         $this->SeedData('admin_accounts', [[
-            'username' => "admin",
-            'password' => password_hash("admin123", PASSWORD_DEFAULT),
-            'email' => "admin@gmail.com",
+            'username' => $adminUsername,
+            'password' => password_hash($adminPassword, PASSWORD_DEFAULT),
+            'email' => $adminEmail,
         ]]);
 
         $this->SeedData('instructors', [
@@ -197,6 +210,16 @@ class InitialData extends Seeder
                 'section_id' => 'B',
             ],
         ]);
+
+        foreach (PortalIdentityService::ACCOUNT_TABLES as $account) {
+            foreach ($this->db->table($account['table'])->get()->getResultArray() as $row) {
+                $identities->syncLegacyAccount(
+                    $account['role'],
+                    (int) $row[$account['id']],
+                    (string) $row['password'],
+                );
+            }
+        }
     }
 
     public function SeedData($table, $data)

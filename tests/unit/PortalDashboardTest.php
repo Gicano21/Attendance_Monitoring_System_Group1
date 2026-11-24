@@ -69,8 +69,14 @@ final class PortalDashboardTest extends CIUnitTestCase
         parent::tearDown();
     }
 
-    public function testAdminEnrolledStudentsPageHasItsCrudColumnsAndEmptyStates(): void
+    public function testAdminEnrolledStudentsPageListsCoursesWithoutExistingStudentAssignments(): void
     {
+        $this->portalDb->table('courses')->insert([
+            'course_id' => 3,
+            'course_acronym' => 'CS101',
+            'course' => 'Programming',
+        ]);
+
         $result = $this->withSession([
             'role' => 'admin',
             'user_id' => 1,
@@ -81,6 +87,8 @@ final class PortalDashboardTest extends CIUnitTestCase
         $result->assertSee('Current Student records');
         $result->assertSee('Last name');
         $result->assertSee('No records yet.');
+        $result->assertSee('type="checkbox" name="course_ids[]"', false);
+        $result->assertSee('CS101');
     }
 
     private function createTable(string $name, array $fields, string $primaryKey): void
