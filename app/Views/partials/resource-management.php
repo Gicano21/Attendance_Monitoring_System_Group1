@@ -98,8 +98,8 @@
     <section class="panel">
         <h2><?= $isEdit ? 'Program/Course assignments' : 'Assign an instructor to a Program/Course' ?></h2>
         <p class="muted">Manage the instructor assignments used for schedules and student enrolment.</p>
-        <?php if ($lookup['instructors'] === [] || $lookup['levels'] === [] || $lookup['programs'] === [] || $lookup['courses'] === []): ?>
-            <p class="empty">Add instructors, levels, programs, and courses before creating assignments.</p>
+        <?php if ($lookup['instructors'] === [] || $lookup['levels'] === [] || $lookup['programs'] === [] || $lookup['courses'] === [] || $lookup['years'] === [] || $lookup['semesters'] === [] || $lookup['sections'] === []): ?>
+            <p class="empty">Add instructors, levels, programs, courses, year levels, semesters, and sections before creating assignments.</p>
         <?php else: ?>
             <form method="post" action="<?= site_url('myadmin/assignments/save') ?>" class="form-grid">
                 <?= csrf_field() ?>
@@ -113,15 +113,18 @@
                 <label>Instructor level<select name="instructor_level_id" required><option value="">Choose level</option><?php foreach ($lookup['levels'] as $option): ?><option value="<?= esc($option['instructor_level_id']) ?>"><?= esc($option['instructor_level']) ?></option><?php endforeach ?></select></label>
                 <label>Program<select name="program_id" required><option value="">Choose program</option><?php foreach ($lookup['programs'] as $option): ?><option value="<?= esc($option['program_id']) ?>"><?= esc($option['program_acronym'] . ' · ' . $option['program']) ?></option><?php endforeach ?></select></label>
                 <label>Course<select name="course_id" required><option value="">Choose course</option><?php foreach ($lookup['courses'] as $option): ?><option value="<?= esc($option['course_id']) ?>"><?= esc($option['course_acronym'] . ' · ' . $option['course']) ?></option><?php endforeach ?></select></label>
+                <label>Year level<select name="year_id" required><option value="">Choose year level</option><?php foreach ($lookup['years'] as $option): ?><option value="<?= esc($option['year_id']) ?>"><?= esc($option['year']) ?></option><?php endforeach ?></select></label>
+                <label>Semester<select name="semester_id" required><option value="">Choose semester</option><?php foreach ($lookup['semesters'] as $option): ?><option value="<?= esc($option['semester_id']) ?>"><?= esc($option['semester']) ?></option><?php endforeach ?></select></label>
+                <label>Section<select name="section_id" required><option value="">Choose section</option><?php foreach ($lookup['sections'] as $option): ?><option value="<?= esc($option['sections_id']) ?>"><?= esc($option['section']) ?></option><?php endforeach ?></select></label>
                 <div class="form-actions"><button class="button button-primary" type="submit"><?= $isEdit ? 'Add assignment' : 'Save assignment' ?></button></div>
             </form>
         <?php endif ?>
     </section>
     <section class="panel table-panel">
         <div class="section-title"><h2>Current instructor assignments</h2></div>
-        <div class="table-wrap"><table><thead><tr><th>Instructor</th><th>Level</th><th>Program</th><th>Course</th><th>Actions</th></tr></thead><tbody>
-            <?php foreach ($assignments as $assignment): ?><tr><td><?= esc($assignment['first_name'] . ' ' . $assignment['last_name']) ?></td><td><?= esc($assignment['instructor_level']) ?></td><td><?= esc($assignment['program_acronym']) ?></td><td><?= esc($assignment['course_acronym']) ?></td><td><form method="post" action="<?= site_url('myadmin/assignments/delete/' . $assignment['faculty_id']) ?>" onsubmit="return confirm('Remove this assignment?')"><?= csrf_field() ?><?php if ($isEdit): ?><input type="hidden" name="instructor_id" value="<?= esc($record['instructor_id']) ?>"><input type="hidden" name="return_to" value="edit"><?php endif ?><button type="submit" class="text-button text-danger">Remove</button></form></td></tr><?php endforeach ?>
-            <?php if ($assignments === []): ?><tr><td colspan="5" class="empty">No instructor assignments yet.</td></tr><?php endif ?>
+        <div class="table-wrap"><table><thead><tr><th>Instructor</th><th>Level</th><th>Program</th><th>Course</th><th>Year level</th><th>Semester</th><th>Section</th><th>Actions</th></tr></thead><tbody>
+            <?php foreach ($assignments as $assignment): ?><tr><td><?= esc($assignment['first_name'] . ' ' . $assignment['last_name']) ?></td><td><?= esc($assignment['instructor_level']) ?></td><td><?= esc($assignment['program_acronym']) ?></td><td><?= esc($assignment['course_acronym']) ?></td><td><?= esc($assignment['year'] ?? 'Unassigned') ?></td><td><?= esc($assignment['semester'] ?? 'Unassigned') ?></td><td><?= esc($assignment['section'] ?? 'Unassigned') ?></td><td><form method="post" action="<?= site_url('myadmin/assignments/delete/' . $assignment['faculty_id']) ?>" onsubmit="return confirm('Remove this assignment?')"><?= csrf_field() ?><?php if ($isEdit): ?><input type="hidden" name="instructor_id" value="<?= esc($record['instructor_id']) ?>"><input type="hidden" name="return_to" value="edit"><?php endif ?><button type="submit" class="text-button text-danger">Remove</button></form></td></tr><?php endforeach ?>
+            <?php if ($assignments === []): ?><tr><td colspan="8" class="empty">No instructor assignments yet.</td></tr><?php endif ?>
         </tbody></table></div>
     </section>
 <?php endif ?>

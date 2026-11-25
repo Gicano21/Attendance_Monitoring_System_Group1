@@ -128,21 +128,6 @@ class InitialData extends Seeder
             ['instructor_level_id' => 3, 'instructor_level' => 'Instructor III'],
         ]);
 
-        $this->SeedData('faculty', [
-            [
-                'instructor_id' => 1,
-                'instructor_level_id' => 3,
-                'assigned_program_id' => 1,
-                'assigned_course_id' => 1,
-            ],
-            [
-                'instructor_id' => 2,
-                'instructor_level_id' => 1,
-                'assigned_program_id' => 1,
-                'assigned_course_id' => 2,
-            ],
-        ]);
-
         $this->SeedData('year', [
             ['year_id' => 1, 'year' => '1st Year'],
             ['year_id' => 2, 'year' => '2nd Year'],
@@ -165,6 +150,27 @@ class InitialData extends Seeder
             ['sections_id' => 'A', 'section' => 'Section A'],
             ['sections_id' => 'B', 'section' => 'Section B'],
             ['sections_id' => 'C', 'section' => 'Section C'],
+        ]);
+
+        $this->SeedData('faculty', [
+            [
+                'instructor_id' => 1,
+                'instructor_level_id' => 3,
+                'assigned_program_id' => 1,
+                'assigned_course_id' => 1,
+                'year_id' => 1,
+                'semester_id' => 1,
+                'section_id' => 'A',
+            ],
+            [
+                'instructor_id' => 2,
+                'instructor_level_id' => 1,
+                'assigned_program_id' => 2,
+                'assigned_course_id' => 2,
+                'year_id' => 2,
+                'semester_id' => 1,
+                'section_id' => 'B',
+            ],
         ]);
 
         $this->SeedData('students', [

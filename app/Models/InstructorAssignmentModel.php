@@ -10,6 +10,7 @@ class InstructorAssignmentModel extends Model
     protected $primaryKey = 'faculty_id';
     protected $allowedFields = [
         'instructor_id', 'instructor_level_id', 'assigned_program_id', 'assigned_course_id',
+        'year_id', 'semester_id', 'section_id',
     ];
 
     protected $validationRules = [
@@ -17,5 +18,8 @@ class InstructorAssignmentModel extends Model
         'instructor_level_id' => 'required|is_natural_no_zero',
         'program_id' => 'required|is_natural_no_zero',
         'course_id' => 'required|is_natural_no_zero',
+        'year_id' => 'required|is_natural_no_zero',
+        'semester_id' => 'required|is_natural_no_zero',
+        'section_id' => 'required',
     ];
 }

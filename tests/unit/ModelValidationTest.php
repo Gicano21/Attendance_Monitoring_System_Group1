@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\AttendanceScheduleModel;
+use App\Models\InstructorAssignmentModel;
 use App\Models\ProgramModel;
 use App\Models\StudentModel;
 use CodeIgniter\Test\CIUnitTestCase;
@@ -47,6 +48,25 @@ final class ModelValidationTest extends CIUnitTestCase
         $this->assertTrue($this->validateModelRules(AttendanceScheduleModel::class, $validSchedule));
         $this->assertFalse($this->validateModelRules(AttendanceScheduleModel::class, array_merge($validSchedule, ['day_of_week' => 8])));
         $this->assertFalse($this->validateModelRules(AttendanceScheduleModel::class, array_merge($validSchedule, ['starts_at' => ''])));
+    }
+
+    public function testInstructorAssignmentRequiresItsFullClassScope(): void
+    {
+        $assignment = [
+            'instructor_id' => 1,
+            'instructor_level_id' => 1,
+            'program_id' => 1,
+            'course_id' => 1,
+            'year_id' => 1,
+            'semester_id' => 1,
+            'section_id' => 'A',
+        ];
+
+        $this->assertTrue($this->validateModelRules(InstructorAssignmentModel::class, $assignment));
+        $this->assertFalse($this->validateModelRules(
+            InstructorAssignmentModel::class,
+            array_merge($assignment, ['section_id' => ''])
+        ));
     }
 
     private function validateModelRules(string $modelClass, array $data): bool

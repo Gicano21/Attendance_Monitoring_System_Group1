@@ -161,8 +161,6 @@ abstract class PortalController extends BaseController
             }
         } elseif ($role === 'instructor' && $page === 'students') {
             $data['rows'] = $this->instructorRoster($userId);
-            $data['assignments'] = $this->instructorAssignments($userId);
-            $data['lookup'] = $this->enrolmentOptions();
         } else {
             $config = self::RESOURCE_FIELDS[$page];
             $data['resource'] = $page;
@@ -243,6 +241,10 @@ abstract class PortalController extends BaseController
         $id = (int) $this->request->getPost('id');
         if ($role === 'instructor' && $id > 0 && !$this->instructorCanManageStudent($id, $this->authenticatedAccountId())) {
             return redirect()->to('instructor/students')->with('error', 'That student is not in your assigned roster.');
+        }
+        if ($role === 'instructor' && $resource === 'students' && $id === 0) {
+            return redirect()->to('instructor/students')
+                ->with('error', 'Students must already be enrolled before they can appear in your roster.');
         }
 
         $values = [];
@@ -416,21 +418,25 @@ abstract class PortalController extends BaseController
         if ($role === 'instructor' && !$this->instructorCanManageStudent($id, $this->authenticatedAccountId())) {
             return redirect()->to('instructor/students')->with('error', 'That student is not in your assigned roster.');
         }
-
         if ($role === 'instructor' && $resource === 'students') {
             $assignments = $this->instructorAssignments($this->authenticatedAccountId());
-            $conditions = [];
-            foreach ($assignments as $assignment) {
-                $conditions[] = '(e.program_id = ' . (int) $assignment['program_id']
-                    . ' AND ca.course_id = ' . (int) $assignment['course_id'] . ')';
-            }
-            if ($conditions !== []) {
-                $enrolments = db_connect()->query(
-                    'SELECT e.enrolment_id FROM enrolments e JOIN courses_assignment ca ON ca.assigned_course_id = e.assigned_course_id '
-                    . 'WHERE e.student_id = ? AND ca.role = ? AND (' . implode(' OR ', $conditions) . ')',
-                    [$id, 'student']
-                )->getResultArray();
-                $enrolmentIds = array_column($enrolments, 'enrolment_id');
+            if ($assignments !== []) {
+                $builder = db_connect()->table('enrolments e')
+                    ->select('e.enrolment_id')
+                    ->join('courses_assignment ca', 'ca.assigned_course_id = e.assigned_course_id')
+                    ->where('e.student_id', $id)
+                    ->where('ca.role', 'student')
+                    ->groupStart();
+                foreach ($assignments as $assignment) {
+                    $builder->orGroupStart()
+                        ->where('e.program_id', $assignment['program_id'])
+                        ->where('ca.course_id', $assignment['course_id'])
+                        ->where('e.year_id', $assignment['year_id'])
+                        ->where('e.semester_id', $assignment['semester_id'])
+                        ->where('e.section_id', $assignment['section_id'])
+                        ->groupEnd();
+                }
+                $enrolmentIds = array_column($builder->groupEnd()->get()->getResultArray(), 'enrolment_id');
                 if ($enrolmentIds !== []) {
                     db_connect()->table('enrolments')->whereIn('enrolment_id', $enrolmentIds)->delete();
                 }
@@ -491,6 +497,9 @@ abstract class PortalController extends BaseController
         $programId = (int) $this->request->getPost('program_id');
         $courseId = (int) $this->request->getPost('course_id');
         $levelId = (int) $this->request->getPost('instructor_level_id');
+        $yearId = (int) $this->request->getPost('year_id');
+        $semesterId = (int) $this->request->getPost('semester_id');
+        $sectionId = trim((string) $this->request->getPost('section_id'));
         $db = db_connect();
 
         $assignmentModel = model(InstructorAssignmentModel::class);
@@ -499,15 +508,21 @@ abstract class PortalController extends BaseController
             'instructor_level_id' => $levelId,
             'program_id' => $programId,
             'course_id' => $courseId,
+            'year_id' => $yearId,
+            'semester_id' => $semesterId,
+            'section_id' => $sectionId,
         ])) {
-            return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, and course.');
+            return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, course, year, semester, and section.');
         }
 
         if ($db->table('instructors')->where('instructor_id', $instructorId)->countAllResults() === 0
             || $db->table('programs')->where('program_id', $programId)->countAllResults() === 0
             || $db->table('courses')->where('course_id', $courseId)->countAllResults() === 0
-            || $db->table('instructor_levels')->where('instructor_level_id', $levelId)->countAllResults() === 0) {
-            return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, and course.');
+            || $db->table('instructor_levels')->where('instructor_level_id', $levelId)->countAllResults() === 0
+            || $db->table('year')->where('year_id', $yearId)->countAllResults() === 0
+            || $db->table('semesters')->where('semester_id', $semesterId)->countAllResults() === 0
+            || $db->table('sections')->where('sections_id', $sectionId)->countAllResults() === 0) {
+            return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, course, year, semester, and section.');
         }
 
         $programAssignmentId = $this->ensureProgramAssignment($programId);
@@ -518,21 +533,46 @@ abstract class PortalController extends BaseController
             ->where('instructor_id', $instructorId)
             ->where('assigned_program_id', $programAssignmentId)
             ->where('assigned_course_id', $instructorCourseAssignmentId)
+            ->where('year_id', $yearId)
+            ->where('semester_id', $semesterId)
+            ->where('section_id', $sectionId)
             ->countAllResults();
         if ($exists > 0) {
             return redirect()->to($returnPath)->with('error', 'This instructor assignment already exists.');
         }
 
+        $legacyAssignment = $db->table('faculty')
+            ->where('instructor_id', $instructorId)
+            ->where('assigned_program_id', $programAssignmentId)
+            ->where('assigned_course_id', $instructorCourseAssignmentId)
+            ->where('year_id', null)
+            ->where('semester_id', null)
+            ->where('section_id', null)
+            ->get()->getRowArray();
+        $assignmentValues = [
+            'instructor_level_id' => $levelId,
+            'year_id' => $yearId,
+            'semester_id' => $semesterId,
+            'section_id' => $sectionId,
+        ];
+        if ($legacyAssignment !== null) {
+            $db->table('faculty')->where('faculty_id', $legacyAssignment['faculty_id'])->update($assignmentValues);
+            if ($db->error()['code'] !== 0) {
+                return redirect()->to($returnPath)->with('error', 'The instructor assignment could not be updated.');
+            }
+            return redirect()->to($returnPath)->with('success', 'Instructor assignment scope updated.');
+        }
+
         $db->table('faculty')->insert([
             'instructor_id' => $instructorId,
-            'instructor_level_id' => $levelId,
+            ...$assignmentValues,
             'assigned_program_id' => $programAssignmentId,
             'assigned_course_id' => $instructorCourseAssignmentId,
         ]);
         if ($db->error()['code'] !== 0) {
             return redirect()->to($returnPath)->with('error', 'The instructor assignment could not be saved.');
         }
-        return redirect()->to($returnPath)->with('success', 'Instructor assigned to the Program/Course.');
+        return redirect()->to($returnPath)->with('success', 'Instructor assigned to the Program/Course/Year/Semester/Section.');
     }
 
     public function deleteFacultyAssignment(int $facultyId)
@@ -695,7 +735,7 @@ abstract class PortalController extends BaseController
     private function instructorAssignments(int $instructorId): array
     {
         return db_connect()->table('faculty f')
-            ->select('f.faculty_id, p.program_id, p.program_acronym, c.course_id, c.course_acronym')
+            ->select('f.faculty_id, p.program_id, p.program_acronym, c.course_id, c.course_acronym, f.year_id, f.semester_id, f.section_id')
             ->join('programs_assignment pa', 'pa.assigned_program_id = f.assigned_program_id')
             ->join('programs p', 'p.program_id = pa.program_id')
             ->join('courses_assignment ca', 'ca.assigned_course_id = f.assigned_course_id')
@@ -708,13 +748,16 @@ abstract class PortalController extends BaseController
     private function facultyAssignments(?int $instructorId = null): array
     {
         $builder = db_connect()->table('faculty f')
-            ->select('f.faculty_id, i.first_name, i.last_name, il.instructor_level, p.program_acronym, c.course_acronym')
+            ->select('f.faculty_id, i.first_name, i.last_name, il.instructor_level, p.program_acronym, c.course_acronym, y.year, sem.semester, sec.section')
             ->join('instructors i', 'i.instructor_id = f.instructor_id')
             ->join('instructor_levels il', 'il.instructor_level_id = f.instructor_level_id')
             ->join('programs_assignment pa', 'pa.assigned_program_id = f.assigned_program_id')
             ->join('programs p', 'p.program_id = pa.program_id')
             ->join('courses_assignment ca', 'ca.assigned_course_id = f.assigned_course_id')
             ->join('courses c', 'c.course_id = ca.course_id')
+            ->join('year y', 'y.year_id = f.year_id', 'left')
+            ->join('semesters sem', 'sem.semester_id = f.semester_id', 'left')
+            ->join('sections sec', 'sec.sections_id = f.section_id', 'left')
             ->orderBy('i.last_name');
         if ($instructorId !== null) {
             $builder->where('f.instructor_id', $instructorId);
@@ -730,6 +773,9 @@ abstract class PortalController extends BaseController
             'levels' => $db->table('instructor_levels')->get()->getResultArray(),
             'programs' => $db->table('programs')->orderBy('program_acronym')->get()->getResultArray(),
             'courses' => $db->table('courses')->orderBy('course_acronym')->get()->getResultArray(),
+            'years' => $db->table('year')->get()->getResultArray(),
+            'semesters' => $db->table('semesters')->get()->getResultArray(),
+            'sections' => $db->table('sections')->get()->getResultArray(),
         ];
     }
 
@@ -774,19 +820,31 @@ abstract class PortalController extends BaseController
             return [];
         }
 
-        $conditions = [];
+        $builder = db_connect()->table('students st')
+            ->distinct()
+            ->select('st.student_id AS id, st.first_name, st.last_name, st.gender, st.birth_date, p.program_acronym, c.course_acronym, y.year, sem.semester, sec.section')
+            ->join('enrolments e', 'e.student_id = st.student_id')
+            ->join('programs p', 'p.program_id = e.program_id')
+            ->join('courses_assignment ca', 'ca.assigned_course_id = e.assigned_course_id')
+            ->join('courses c', 'c.course_id = ca.course_id')
+            ->join('year y', 'y.year_id = e.year_id')
+            ->join('semesters sem', 'sem.semester_id = e.semester_id')
+            ->join('sections sec', 'sec.sections_id = e.section_id')
+            ->where('ca.role', 'student')
+            ->groupStart();
         foreach ($assignments as $assignment) {
-            $conditions[] = '(e.program_id = ' . (int) $assignment['program_id']
-                . ' AND ca.course_id = ' . (int) $assignment['course_id'] . ')';
+            $builder->orGroupStart()
+                ->where('e.program_id', $assignment['program_id'])
+                ->where('ca.course_id', $assignment['course_id'])
+                ->where('e.year_id', $assignment['year_id'])
+                ->where('e.semester_id', $assignment['semester_id'])
+                ->where('e.section_id', $assignment['section_id'])
+                ->groupEnd();
         }
+        return $builder->groupEnd()
+            ->orderBy('st.last_name')->orderBy('st.first_name')
+            ->get()->getResultArray();
 
-        return db_connect()->query(
-            'SELECT DISTINCT st.student_id AS id, st.first_name, st.last_name, st.gender, st.birth_date '
-            . 'FROM students st JOIN enrolments e ON e.student_id = st.student_id '
-            . 'JOIN courses_assignment ca ON ca.assigned_course_id = e.assigned_course_id '
-            . 'WHERE ca.role = ? AND (' . implode(' OR ', $conditions) . ') ORDER BY st.last_name, st.first_name',
-            ['student']
-        )->getResultArray();
     }
 
     private function instructorCanManageStudent(int $studentId, int $instructorId): bool
