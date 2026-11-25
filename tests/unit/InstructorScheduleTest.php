@@ -24,6 +24,9 @@ final class InstructorScheduleTest extends CIUnitTestCase
             'instructor_id' => ['type' => 'INT', 'constraint' => 10],
             'assigned_program_id' => ['type' => 'INT', 'constraint' => 10],
             'assigned_course_id' => ['type' => 'INT', 'constraint' => 10],
+            'year_id' => ['type' => 'INT', 'constraint' => 1, 'null' => true],
+            'semester_id' => ['type' => 'INT', 'constraint' => 1, 'null' => true],
+            'section_id' => ['type' => 'VARCHAR', 'constraint' => 8, 'null' => true],
         ], 'faculty_id');
         $this->createTable('programs_assignment', [
             'assigned_program_id' => ['type' => 'INT', 'constraint' => 10],

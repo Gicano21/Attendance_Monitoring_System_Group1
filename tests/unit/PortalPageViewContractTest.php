@@ -89,6 +89,9 @@ final class PortalPageViewContractTest extends CIUnitTestCase
                     'faculty_id' => 1,
                     'program_id' => 1,
                     'course_id' => 1,
+                    'year_id' => 1,
+                    'semester_id' => 1,
+                    'section_id' => 'A',
                     'program_acronym' => 'TEST',
                     'course_acronym' => 'TST101',
                 ]];
@@ -104,6 +107,10 @@ final class PortalPageViewContractTest extends CIUnitTestCase
             if ($role === 'admin' && $page === 'edit') {
                 $this->assertStringContainsString('type="checkbox" name="course_ids[]" value="3" checked', $html);
                 $this->assertStringContainsString('selected>2025-2026</option>', $html);
+            }
+            if ($role === 'instructor' && $page === 'students') {
+                $this->assertStringContainsString('already enrolled in your assigned Program, Course, Year Level, Semester, and Section', $html);
+                $this->assertStringNotContainsString('Add student to your class roster', $html);
             }
             if ($role === 'instructor' && $page === 'schedules') {
                 $this->assertStringContainsString('Class Day', $html);
@@ -134,6 +141,9 @@ final class PortalPageViewContractTest extends CIUnitTestCase
             'courses' => [['course_id' => 3, 'course_acronym' => 'CS101', 'course' => 'Programming']],
             'levels' => [['instructor_level_id' => 1, 'instructor_level' => 'Instructor I']],
             'instructors' => [['instructor_id' => 7, 'first_name' => 'Test', 'last_name' => 'Instructor']],
+            'years' => [['year_id' => 1, 'year' => '1st Year']],
+            'semesters' => [['semester_id' => 1, 'semester' => '1st Semester']],
+            'sections' => [['sections_id' => 'A', 'section' => 'Section A']],
         ];
         $data['assignments'] = [[
             'faculty_id' => 11,
@@ -142,6 +152,9 @@ final class PortalPageViewContractTest extends CIUnitTestCase
             'instructor_level' => 'Instructor I',
             'program_acronym' => 'BSIT',
             'course_acronym' => 'CS101',
+            'year' => '1st Year',
+            'semester' => '1st Semester',
+            'section' => 'Section A',
         ]];
         session()->set(['role' => 'admin', 'user_id' => 1, 'display_name' => 'Administrator']);
 
