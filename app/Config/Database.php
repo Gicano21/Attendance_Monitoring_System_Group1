@@ -26,10 +26,10 @@ class Database extends Config
      */
     public array $default = [
         'DSN'          => '',
-        'hostname'     => 'db.fr-roub1.bengt.wasmernet.com',
-        'username'     => 'user_9df6dce9',
-        'password'     => 'pw_QsMW4T95mzIefhRQ9K8MRI1BcJnJbxtm',
-        'database'     => 'db_45277780',
+        'hostname'     => 'localhost',
+        'username'     => 'root',
+        'password'     => '',
+        'database'     => 'school_db',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
         'pConnect'     => false,
@@ -41,7 +41,7 @@ class Database extends Config
         'compress'     => false,
         'strictOn'     => false,
         'failover'     => [],
-        'port'         => 20184,
+        'port'         => 3306,
         'numberNative' => false,
         'foundRows'    => false,
         'dateFormat'   => [
@@ -193,6 +193,12 @@ class Database extends Config
     public function __construct()
     {
         parent::__construct();
+
+        $this->default['hostname'] = env('DB_HOST', $this->default['hostname']);
+        $this->default['username'] = env('DB_USERNAME', $this->default['username']);
+        $this->default['password'] = env('DB_PASSWORD', $this->default['password']);
+        $this->default['database'] = env('DB_NAME', $this->default['database']);
+        $this->default['port']     = (int) env('DB_PORT', $this->default['port']);
 
         // Ensure that we always set the database group to 'tests' if
         // we are currently running an automated test suite, so that

@@ -19,10 +19,11 @@ A CodeIgniter 4 application for role-based student and instructor attendance, wi
 | Browser QR camera scanner | Not included |
 | Admin UI for faculty/course/program assignments | Implemented on the Instructors page using the existing assignment tables |
 | Shield authentication and role-based authorization | Implemented for admin, instructor, and student accounts |
+| Wasmer database environment configuration | Implemented; deployment must provide the `DB_*` connection variables |
 
 **Progress update requirement:** Every AI agent or contributor who changes this project must update this table and the related setup/feature notes in this README before finishing. Record what changed, what was verified, and any remaining setup or limitations. Do not mark a feature complete unless it has been run or tested.
 
-**Latest implementation note:** Instructors select a recurring weekday (Monday-Sunday) instead of a class date. Existing date-specific schedules remain valid on their original date. Every navigation destination has its own controller and view, while shared layout and reusable components avoid duplicating presentation. Entity validation rules live in models. The QR scan API route and its device-key setup have been removed; implement the scanner submission flow separately. Verification passed: 6 focused PHPUnit tests (54 assertions), PHP syntax checks, route listing, login-page smoke checks, and confirmation that the removed endpoint returns 404. The full database-backed test suite was not run because PHP's `sqlite3` extension is unavailable in this environment.
+**Latest implementation note:** Instructors select a recurring weekday (Monday-Sunday) instead of a class date. Existing date-specific schedules remain valid on their original date. Every navigation destination has its own controller and view, while shared layout and reusable components avoid duplicating presentation. Entity validation rules live in models. The QR scan API route and its device-key setup have been removed; implement the scanner submission flow separately. Wasmer database settings are read from `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD` rather than stored in source. Verification passed: 6 focused PHPUnit tests (54 assertions), PHP syntax checks, route listing, login-page smoke checks, and confirmation that the removed endpoint returns 404. Database connectivity must be confirmed in the Wasmer deployment after rotating the exposed password.
 
 **Shield authentication update:** CodeIgniter Shield now authenticates all three portal roles, assigns role groups, protects role-specific routes, rate-limits login pages, and uses session-based CSRF. Existing account IDs and login pages are retained. The Shield account migration imports usable existing password hashes and converts legacy plaintext passwords; malformed or truncated legacy hashes are logged and must be reset. Verification: PHP syntax checks and route listing passed; the portal view/model tests passed (5 tests, 52 assertions). The role-route feature test could not run because the configured PHP lacks `sqlite3`.
 
@@ -37,7 +38,7 @@ A CodeIgniter 4 application for role-based student and instructor attendance, wi
 ## Requirements and setup
 
 1. Use PHP 8.2+ with the CodeIgniter-required extensions and a configured MySQL-compatible database.
-2. Copy the project environment template to `.env` if needed and set the application URL and database credentials there. Do not commit `.env` or credentials.
+2. For local development, copy the project environment template to `.env` if needed and set the application URL and database credentials there. Do not commit `.env` or credentials. On Wasmer, configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, and `DB_PASSWORD` as application environment variables; Wasmer provides these for its attached database.
 3. From the project root, install dependencies if needed:
 
    ```sh
@@ -59,7 +60,7 @@ A CodeIgniter 4 application for role-based student and instructor attendance, wi
    php spark serve
    ```
 
-The database connection defaults in `app/Config/Database.php` are intentionally blank; set credentials in the local environment rather than source control.
+The database config uses local-only fallback defaults and maps Wasmer's `DB_*` variables to CodeIgniter's default MySQL connection. Rotate any credentials shared in screenshots or chat, and keep all database credentials out of source control.
 
 ## Role access
 
