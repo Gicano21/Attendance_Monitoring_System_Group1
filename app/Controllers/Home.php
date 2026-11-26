@@ -8,4 +8,8 @@ class Home extends BaseController
     {
         return view('pages/home');
     }
+
+    public function test(){
+        echo "Hello World";
+    }
 }

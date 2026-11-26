@@ -4,6 +4,7 @@ use CodeIgniter\Router\RouteCollection;
 
 /** @var RouteCollection $routes */
 $routes->get('/', 'Home::index', ['as' => 'login']);
+$routes->get('/', 'Home::index', 'Home::test');
 
 $routes->get('student', 'StudentLogin::index', ['filter' => 'auth-rates']);
 $routes->post('student/login', 'StudentLogin::authenticate', ['filter' => 'auth-rates']);
