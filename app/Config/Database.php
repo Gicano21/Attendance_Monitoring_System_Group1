@@ -26,10 +26,10 @@ class Database extends Config
      */
     public array $default = [
         'DSN'          => '',
-        'hostname'     => 'localhost',
-        'username'     => '',
-        'password'     => '',
-        'database'     => '',
+        'hostname'     => 'db.fr-roub1.bengt.wasmernet.com',
+        'username'     => 'user_9df6dce9',
+        'password'     => 'pw_QsMW4T95mzIefhRQ9K8MRI1BcJnJbxtm',
+        'database'     => 'db_45277780',
         'DBDriver'     => 'MySQLi',
         'DBPrefix'     => '',
         'pConnect'     => false,
@@ -41,7 +41,7 @@ class Database extends Config
         'compress'     => false,
         'strictOn'     => false,
         'failover'     => [],
-        'port'         => 3306,
+        'port'         => 20184,
         'numberNative' => false,
         'foundRows'    => false,
         'dateFormat'   => [
