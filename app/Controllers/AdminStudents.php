@@ -23,4 +23,9 @@ class AdminStudents extends PortalController
     {
         return $this->deleteResource('students', $id);
     }
+
+    public function restore(int $id)
+    {
+        return $this->restoreResource('students', $id);
+    }
 }

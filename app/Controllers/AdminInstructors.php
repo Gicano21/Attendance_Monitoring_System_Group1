@@ -24,6 +24,11 @@ class AdminInstructors extends PortalController
         return $this->deleteResource('instructors', $id);
     }
 
+    public function restore(int $id)
+    {
+        return $this->restoreResource('instructors', $id);
+    }
+
     public function saveAssignment()
     {
         return $this->saveFacultyAssignment();

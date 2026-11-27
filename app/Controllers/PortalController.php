@@ -62,7 +62,8 @@ abstract class PortalController extends BaseController
 
         $authenticatedRole = $this->authenticatedRole();
         if ($authenticatedRole !== null) {
-            return redirect()->to($this->landingPath($authenticatedRole));
+            return redirect()->to($this->landingPath($authenticatedRole))
+                ->with('error', 'You are already signed in. Log out first to open a login option.');
         }
 
         return view('pages/login/' . $role, [
@@ -85,14 +86,19 @@ abstract class PortalController extends BaseController
 
         $authenticatedRole = $this->authenticatedRole();
         if ($authenticatedRole !== null) {
-            return redirect()->to($this->landingPath($authenticatedRole));
+            return redirect()->to($this->landingPath($authenticatedRole))
+                ->with('error', 'You are already signed in. Log out first to open a login option.');
         }
 
         session()->remove(['role', 'user_id', 'display_name']);
 
         $table = $role === 'admin' ? 'admin_accounts' : ($role === 'student' ? 'students' : 'instructors');
         $key = $role === 'admin' ? 'username' : ($role === 'student' ? 'student_id' : 'instructor_id');
-        $account = db_connect()->table($table)->where($key, $identifier)->get()->getRowArray();
+        $accountBuilder = db_connect()->table($table)->where($key, $identifier);
+        if ($role !== 'admin') {
+            $accountBuilder->where($table . '.deleted_at', null);
+        }
+        $account = $accountBuilder->get()->getRowArray();
 
         if ($account === null) {
             return redirect()->back()->withInput()->with('error', 'The account ID or password is incorrect.');
@@ -145,6 +151,7 @@ abstract class PortalController extends BaseController
         if ($role === 'admin' && $page === 'attendance') {
             $data['rows'] = db_connect()->table('instructors i')
                 ->select('i.instructor_id AS id, i.first_name, i.last_name, i.in_campus')
+                ->where('i.deleted_at', null)
                 ->orderBy('i.last_name')->get()->getResultArray();
             $data['records'] = $this->attendanceRecords();
         } elseif ($page === 'attendance') {
@@ -167,6 +174,10 @@ abstract class PortalController extends BaseController
             $data['columns'] = $config['fields'];
             $data['labels'] = $config['labels'];
             $data['rows'] = db_connect()->table($config['table'])
+                ->where($config['table'] . '.deleted_at', null)
+                ->orderBy($config['primary'], 'DESC')->get()->getResultArray();
+            $data['deletedRows'] = db_connect()->table($config['table'])
+                ->where($config['table'] . '.deleted_at IS NOT NULL')
                 ->orderBy($config['primary'], 'DESC')->get()->getResultArray();
             if ($page === 'students') {
                 $data['lookup'] = $this->enrolmentOptions();
@@ -205,7 +216,9 @@ abstract class PortalController extends BaseController
         }
 
         $record = db_connect()->table($config['table'])
-            ->where($config['primary'], $id)->get()->getRowArray();
+            ->where($config['primary'], $id)
+            ->where($config['table'] . '.deleted_at', null)
+            ->get()->getRowArray();
         if ($record === null) {
             return redirect()->to($this->landingPath($role))->with('error', 'The selected record no longer exists.');
         }
@@ -444,20 +457,53 @@ abstract class PortalController extends BaseController
             return redirect()->to('instructor/students')->with('success', 'Student removed from your assigned roster.');
         }
 
-        if ($this->hasDependents($resource, $id)) {
-            return redirect()->to($this->landingPath($role, $resource))
-                ->with('error', 'This record is assigned to active students, instructors, or attendance windows and cannot be deleted.');
-        }
-        db_connect()->table($config['table'])->where($config['primary'], $id)->delete();
+        db_connect()->table($config['table'])->where($config['primary'], $id)->update([
+            'deleted_at' => date('Y-m-d H:i:s'),
+        ]);
         if (db_connect()->error()['code'] !== 0) {
             return redirect()->to($this->landingPath($role, $resource))
-                ->with('error', 'This record is still in use and cannot be deleted.');
+                ->with('error', 'This record could not be moved to deleted records.');
         }
         if ($resource === 'students' || $resource === 'instructors') {
             $accountRole = $resource === 'students' ? 'student' : 'instructor';
             (new PortalIdentityService())->deleteAccount($accountRole, $id);
         }
-        return redirect()->to($this->landingPath($role, $resource))->with('success', 'Deleted successfully.');
+        return redirect()->to($this->landingPath($role, $resource))->with('success', 'Deleted successfully. It can be restored from Deleted records.');
+    }
+
+    public function restoreResource(string $resource, int $id)
+    {
+        if ($this->authenticatedRole() !== 'admin') {
+            return redirect()->to('/');
+        }
+
+        $config = self::RESOURCE_FIELDS[$resource] ?? null;
+        if ($config === null) {
+            return redirect()->to('myadmin');
+        }
+
+        $deleted = db_connect()->table($config['table'])
+            ->where($config['primary'], $id)
+            ->where($config['table'] . '.deleted_at IS NOT NULL')
+            ->get()->getRowArray();
+        if ($deleted === null) {
+            return redirect()->to($this->landingPath('admin', $resource))
+                ->with('error', 'The selected record is not in Deleted records.');
+        }
+
+        db_connect()->table($config['table'])->where($config['primary'], $id)->update([
+            'deleted_at' => null,
+        ]);
+        if (db_connect()->error()['code'] !== 0) {
+            return redirect()->to($this->landingPath('admin', $resource))
+                ->with('error', 'The record could not be restored.');
+        }
+        if ($resource === 'students' || $resource === 'instructors') {
+            $accountRole = $resource === 'students' ? 'student' : 'instructor';
+            (new PortalIdentityService())->restoreAccount($accountRole, $id);
+        }
+        return redirect()->to($this->landingPath('admin', $resource))
+            ->with('success', 'Record restored successfully.');
     }
 
     public function schedules()
@@ -515,9 +561,9 @@ abstract class PortalController extends BaseController
             return redirect()->to($returnPath)->with('error', 'Choose an existing instructor, level, program, course, year, semester, and section.');
         }
 
-        if ($db->table('instructors')->where('instructor_id', $instructorId)->countAllResults() === 0
-            || $db->table('programs')->where('program_id', $programId)->countAllResults() === 0
-            || $db->table('courses')->where('course_id', $courseId)->countAllResults() === 0
+        if ($db->table('instructors')->where('instructor_id', $instructorId)->where('deleted_at', null)->countAllResults() === 0
+            || $db->table('programs')->where('program_id', $programId)->where('deleted_at', null)->countAllResults() === 0
+            || $db->table('courses')->where('course_id', $courseId)->where('deleted_at', null)->countAllResults() === 0
             || $db->table('instructor_levels')->where('instructor_level_id', $levelId)->countAllResults() === 0
             || $db->table('year')->where('year_id', $yearId)->countAllResults() === 0
             || $db->table('semesters')->where('semester_id', $semesterId)->countAllResults() === 0
@@ -769,10 +815,10 @@ abstract class PortalController extends BaseController
     {
         $db = db_connect();
         return [
-            'instructors' => $db->table('instructors')->orderBy('last_name')->get()->getResultArray(),
+            'instructors' => $db->table('instructors')->where('deleted_at', null)->orderBy('last_name')->get()->getResultArray(),
             'levels' => $db->table('instructor_levels')->get()->getResultArray(),
-            'programs' => $db->table('programs')->orderBy('program_acronym')->get()->getResultArray(),
-            'courses' => $db->table('courses')->orderBy('course_acronym')->get()->getResultArray(),
+            'programs' => $db->table('programs')->where('deleted_at', null)->orderBy('program_acronym')->get()->getResultArray(),
+            'courses' => $db->table('courses')->where('deleted_at', null)->orderBy('course_acronym')->get()->getResultArray(),
             'years' => $db->table('year')->get()->getResultArray(),
             'semesters' => $db->table('semesters')->get()->getResultArray(),
             'sections' => $db->table('sections')->get()->getResultArray(),
@@ -861,9 +907,10 @@ abstract class PortalController extends BaseController
     {
         $db = db_connect();
         return [
-            'programs' => $db->table('programs')->orderBy('program_acronym')->get()->getResultArray(),
+            'programs' => $db->table('programs')->where('deleted_at', null)->orderBy('program_acronym')->get()->getResultArray(),
             'courses' => $db->table('courses')
                 ->select('course_id, course_acronym, course')
+                ->where('deleted_at', null)
                 ->orderBy('course_acronym')->get()->getResultArray(),
             'years' => $db->table('year')->get()->getResultArray(),
             'school_years' => $db->table('school_year')->get()->getResultArray(),
@@ -900,8 +947,8 @@ abstract class PortalController extends BaseController
         }
 
         $db = db_connect();
-        $programExists = $db->table('programs')->where('program_id', $programId)->countAllResults() > 0;
-        $courseExists = $db->table('courses')->where('course_id', $courseId)->countAllResults() > 0;
+        $programExists = $db->table('programs')->where('program_id', $programId)->where('deleted_at', null)->countAllResults() > 0;
+        $courseExists = $db->table('courses')->where('course_id', $courseId)->where('deleted_at', null)->countAllResults() > 0;
         if (!$programExists || !$courseExists) {
             return null;
         }
@@ -989,6 +1036,7 @@ abstract class PortalController extends BaseController
             'labels' => [],
             'rows' => [],
             'records' => [],
+            'deletedRows' => [],
             'enrolments' => [],
             'assignments' => [],
             'lookup' => [

@@ -4,13 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><?= esc($this->renderSection('title') ?: ($title ?? 'Attendance Monitor')) ?> | Group 1</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="<?= base_url('css/style.css') ?>">
 </head>
 <body>
     <?= $this->include('partials/navbar') ?>
     <?php $authSessionField = config('Auth')->sessionConfig['field']; ?>
     <?php $authSession = session($authSessionField) ?? []; ?>
-    <main class="<?= isset($authSession['id']) ? 'app-main' : 'public-main' ?>">
+    <main class="<?= isset($authSession['id']) ? 'app-main container-fluid' : 'public-main container-fluid' ?>">
         <?php if ($message = session()->getFlashdata('success')): ?>
             <div class="notice notice-success"><?= esc($message) ?></div>
         <?php endif ?>

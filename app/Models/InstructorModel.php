@@ -10,8 +10,10 @@ class InstructorModel extends Model
     protected $primaryKey = 'instructor_id';
     protected $allowedFields = [
         'last_name', 'middle_name', 'first_name', 'extension_name', 'gender', 'birth_date',
-        'password', 'in_campus',
+        'password', 'in_campus', 'deleted_at',
     ];
+    protected $useSoftDeletes = true;
+    protected $deletedField = 'deleted_at';
 
     protected $validationRules = [
         'first_name' => 'required',

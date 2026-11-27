@@ -155,6 +155,20 @@ class PortalIdentityService
         }
     }
 
+    public function restoreAccount(string $role, int $accountId): void
+    {
+        $user = model(UserModel::class)
+            ->withDeleted()
+            ->where('username', $this->usernameFor($role, $accountId))
+            ->first();
+        if ($user !== null) {
+            $db = db_connect();
+            $db->table(config('Auth')->tables['users'])->where('id', $user->id)->update([
+                'deleted_at' => null,
+            ]);
+        }
+    }
+
     private function ensureAccount(string $role, int $accountId, string $password, bool $passwordIsHash): User
     {
         $username = $this->usernameFor($role, $accountId);

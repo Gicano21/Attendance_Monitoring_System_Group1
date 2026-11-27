@@ -92,6 +92,25 @@
             </tbody>
         </table></div>
     </section>
+
+    <section class="panel table-panel deleted-records">
+        <div class="section-title">
+            <div><h2>Deleted <?= esc($config[1]) ?> records</h2><p class="muted">Restore records that were soft deleted.</p></div>
+        </div>
+        <div class="table-wrap"><table>
+            <thead><tr><th>ID</th><?php foreach ($columns as $field): ?><th><?= esc($labels[$field]) ?></th><?php endforeach ?><th>Action</th></tr></thead>
+            <tbody>
+            <?php foreach ($deletedRows as $row): ?>
+                <tr><td><?= esc($row[$config[0]]) ?></td><?php foreach ($columns as $field): ?><td><?= esc($row[$field]) ?></td><?php endforeach ?>
+                    <td class="actions">
+                        <form method="post" action="<?= site_url('myadmin/' . $resourceName . '/restore/' . $row[$config[0]]) ?>" onsubmit="return confirm('Restore this record?')"><?= csrf_field() ?><button class="text-button" type="submit">Restore</button></form>
+                    </td>
+                </tr>
+            <?php endforeach ?>
+            <?php if ($deletedRows === []): ?><tr><td colspan="<?= count($columns) + 2 ?>" class="empty">No deleted records.</td></tr><?php endif ?>
+            </tbody>
+        </table></div>
+    </section>
 <?php endif ?>
 
 <?php if ($resourceName === 'instructors'): ?>
